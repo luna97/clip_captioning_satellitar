@@ -60,7 +60,7 @@ class ClipGPT(nn.Module):
         text_features = self.clip.encode_text(captions_clip)
         return image_features, text_features
     
-    def train_generator(self, captions, images):
+    def train_generator(self, captions):
         with torch.no_grad():
             captions_clip = clip.tokenize(captions).to(self.device)
             clip_embedding = self.clip.encode_text(captions_clip)
@@ -104,12 +104,8 @@ class ClipGPT(nn.Module):
 
         return output.loss
     
-    def get_caption(self, images):
-        clip_embedding = self.clip.encode_image(images)
-        # clip_embedding = self.vision_transformer(images)
-        # clip_embedding = clip_embedding / clip_embedding.norm(2, dim=-1, keepdim=True)
+    def get_caption(self, clip_embedding):
         clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
-        # clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
 
         text = self.generator.generate(
             inputs_embeds=clip_embedding,

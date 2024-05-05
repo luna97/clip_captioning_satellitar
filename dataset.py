@@ -49,7 +49,50 @@ class NWPUCaptions(Dataset):
                 sentences.append(sample[key])
         return dict(x=x, captions=sentences)
 
+class SidneyCaptions(Dataset):
+    splits = ["train", "val", "test"]
 
+    def __init__(self, root, split, transform=None):
+        assert split in self.splits
+
+        self.image_root = "images"
+        self.root = root
+        self.split = split
+        self.transform = transform
+        captions_file = os.path.join(root, 'filenames', "descriptions_SIDNEY.txt")
+        split_file = os.path.join(root, 'filenames', f"filenames_{split}.txt")
+        self.captions = self.load_captions(captions_file, split_file)
+
+    @staticmethod
+    def load_captions(captions_file: str, split_file: str) -> List[Dict]:
+        captions = open(captions_file)
+        split = open(split_file)
+        samples = []
+        split = split.read().splitlines()
+        captions = captions.read().splitlines()
+        captions = [caption.split() for caption in captions]
+        captions = [ {'id': caption[0], 'caption': caption[1:]} for caption in captions ]
+
+        for s in split:
+            id = s.split('.')[0]
+            c = []
+            for caption in captions:
+                if caption['id'] == id:
+                   c.append(' '.join(caption['caption']).strip())
+            samples.append({'filename': s, 'captions': c})
+            
+        
+        return samples
+
+    def __len__(self):
+        return len(self.captions)
+
+    def __getitem__(self, idx):
+        sample = self.captions[idx]
+        path = os.path.join(self.root, self.image_root, sample["filename"])
+        x = Image.open(path).convert("RGB")
+        x = self.transform(x)
+        return dict(x=x, captions=sample["captions"])
 
 def get_datasets(transform):
 
@@ -64,11 +107,6 @@ def get_datasets(transform):
         split="val", 
         transform=transform
     )
-    rscid_dataset_test = RSICD(
-        root="data/rsicd/",
-        split="test", 
-        transform=transform
-    )
 
     # UCM Captions datasets
     ucm_dataset_train = UCMCaptions(
@@ -79,11 +117,6 @@ def get_datasets(transform):
     ucm_dataset_val = UCMCaptions(
         root="data/ucm/",
         split="val", 
-        transform=transform
-    )
-    ucm_dataset_test = UCMCaptions(
-        root="data/ucm/",
-        split="test", 
         transform=transform
     )
 
@@ -98,13 +131,20 @@ def get_datasets(transform):
         split="val", 
         transform=transform
     )
-    nwpucaptions_dataset_test = NWPUCaptions(
-        root="data/nwpu/",
-        split="test", 
+
+    sydney_dataset_train = SidneyCaptions(
+        root="data/sidney/",
+        split="train", 
         transform=transform
     )
 
-    dataset_train = ConcatDataset([rscid_dataset_train, ucm_dataset_train, nwpucaptions_dataset_train])
-    dataset_val = ConcatDataset([rscid_dataset_val, ucm_dataset_val, nwpucaptions_dataset_val])
-    dataset_test = ConcatDataset([rscid_dataset_test, ucm_dataset_test, nwpucaptions_dataset_test])
-    return dataset_train, dataset_val, dataset_test
+    sydney_dataset_val = SidneyCaptions(
+        root="data/sidney/",
+        split="val", 
+        transform=transform
+    )
+
+
+    dataset_train = ConcatDataset([rscid_dataset_train, ucm_dataset_train, nwpucaptions_dataset_train, sydney_dataset_train])
+    dataset_val = ConcatDataset([rscid_dataset_val, ucm_dataset_val, nwpucaptions_dataset_val, sydney_dataset_val])
+    return dataset_train, dataset_val
