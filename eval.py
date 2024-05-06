@@ -4,8 +4,6 @@ from model import ClipGPT
 from dataset import NWPUCaptions, SidneyCaptions
 from torch.utils.data import DataLoader
 from torchrs.datasets import RSICD, UCMCaptions
-import clip
-import os
 from torchvision import transforms as T
 from tqdm import tqdm
 from pycocoevalcap.cider.cider import Cider
@@ -13,8 +11,9 @@ from pycocoevalcap.cider.cider import Cider
 from nltk.translate.meteor_score import meteor_score as Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.bleu.bleu import Bleu
-from pycocoevalcap.spice.spice import Spice
 import numpy as np
+import datasets
+
 
 path = 'data/models/full.pth'
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -22,40 +21,10 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
+test_datasets = datasets.get_test_datasets(net.preprocess_clip)
 
 # load datasets
-rsicd_dataset = RSICD(
-    root="data/rsicd/",
-    split="test", 
-    transform=net.preprocess_clip
-)
-    
-# UCM Captions datasets
-ucm_dataset = UCMCaptions(
-    root="data/ucm/",
-    split="test", 
-    transform=net.preprocess_clip
-)
-
-# NWPUCaptions datasets
-nwpucaptions_dataset = NWPUCaptions(
-    root="data/nwpu/",
-    split="test", 
-    transform=net.preprocess_clip
-)
-
-# Sidney Captions datasets
-sydney_dataset = SidneyCaptions(
-    root="data/sidney/",
-    split="test", 
-    transform=net.preprocess_clip
-)
-
 bartch_size = 16
-rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=bartch_size, shuffle=False)
-ucm_dataloader = DataLoader(ucm_dataset, batch_size=bartch_size, shuffle=False)
-nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=bartch_size, shuffle=False)
-sydney_dataloader = DataLoader(sydney_dataset, batch_size=bartch_size, shuffle=False)
 
 bleu1_scorer = Bleu(n=1)
 bleu2_scorer = Bleu(n=2)
@@ -64,18 +33,16 @@ bleu4_scorer = Bleu(n=4)
 
 cider_scorer = Cider()
 rouge_scorer = Rouge()
-spice_scorer = Spice()  # Add Spice scorer
 
 def test(dataloader):
     net.eval()
     blue1_scores = []
-    blue2_scores = []  # Add blue2_scores list
-    blue3_scores = []  # Add blue3_scores list
-    blue4_scores = []  # Add blue4_scores list
+    blue2_scores = []  
+    blue3_scores = []  
+    blue4_scores = []  
     rouge_scores = []
     cider_scores = []
     meteor_scores = []
-    spice_scores = []  # Add spice_scores list
     count = 0
     with torch.no_grad():
         for batch in tqdm(dataloader):
@@ -122,48 +89,62 @@ def test(dataloader):
         'meteor': np.mean(meteor_scores),
     }
 
-res = test(rsicd_dataloader)
-print("-------------- RSICD results --------------")
-print(f'RSICD BLEU1: {res["bleu1"]}')
-print(f'RSICD BLEU2: {res["bleu2"]}')
-print(f'RSICD BLEU3: {res["bleu3"]}')
-print(f'RSICD BLEU4: {res["bleu4"]}')
-print(f'RSICD ROUGE: {res["rouge"]}')
-print(f'RSICD CIDER: {res["cider"]}')
-print(f'RSICD METEOR: {res["meteor"]}')
-print('\n\n')
+if 'rsicd' in test_datasets.keys():
+    rsicd_dataset = test_datasets['rsicd']
+    rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=bartch_size, shuffle=False)
+    res = test(rsicd_dataloader)
 
-print("-------------- UCM results --------------")
-res = test(ucm_dataloader)
-print(f'UCM BLEU1: {res["bleu1"]}')
-print(f'UCM BLEU2: {res["bleu2"]}')
-print(f'UCM BLEU3: {res["bleu3"]}')
-print(f'UCM BLEU4: {res["bleu4"]}')
-print(f'UCM ROUGE: {res["rouge"]}')
-print(f'UCM CIDER: {res["cider"]}')
-print(f'UCM METEOR: {res["meteor"]}')
-print('\n\n')
+    print("-------------- RSICD results --------------")
+    print(f'RSICD BLEU1: {res["bleu1"]}')
+    print(f'RSICD BLEU2: {res["bleu2"]}')
+    print(f'RSICD BLEU3: {res["bleu3"]}')
+    print(f'RSICD BLEU4: {res["bleu4"]}')
+    print(f'RSICD ROUGE: {res["rouge"]}')
+    print(f'RSICD CIDER: {res["cider"]}')
+    print(f'RSICD METEOR: {res["meteor"]}')
+    print('\n\n')
 
-print("-------------- NWPUCaptions results --------------")
-res = test(nwpucaptions_dataloader)
-print(f'NWPUCaptions BLEU1: {res["bleu1"]}')
-print(f'NWPUCaptions BLEU2: {res["bleu2"]}')
-print(f'NWPUCaptions BLEU3: {res["bleu3"]}')
-print(f'NWPUCaptions BLEU4: {res["bleu4"]}')
-print(f'NWPUCaptions ROUGE: {res["rouge"]}')
-print(f'NWPUCaptions CIDER: {res["cider"]}')
-print(f'NWPUCaptions METEOR: {res["meteor"]}')
-print('\n\n')
+if 'ucm' in test_datasets.keys():
+    ucm_dataset = test_datasets['ucm']
+    ucm_dataloader = DataLoader(ucm_dataset, batch_size=bartch_size, shuffle=False)
+    res = test(ucm_dataloader)
 
-print("-------------- Sidney results --------------")
-res = test(sydney_dataloader)
-print(f'Sydney BLEU1: {res["bleu1"]}')
-print(f'Sydney BLEU2: {res["bleu2"]}')
-print(f'Sydney BLEU3: {res["bleu3"]}')
-print(f'Sydney BLEU4: {res["bleu4"]}')
-print(f'Sydney ROUGE: {res["rouge"]}')
-print(f'Sydney CIDER: {res["cider"]}')
-print(f'Sydney METEOR: {res["meteor"]}')
-print('\n\n')
+    print("-------------- UCM results --------------")
+    print(f'UCM BLEU1: {res["bleu1"]}')
+    print(f'UCM BLEU2: {res["bleu2"]}')
+    print(f'UCM BLEU3: {res["bleu3"]}')
+    print(f'UCM BLEU4: {res["bleu4"]}')
+    print(f'UCM ROUGE: {res["rouge"]}')
+    print(f'UCM CIDER: {res["cider"]}')
+    print(f'UCM METEOR: {res["meteor"]}')
+    print('\n\n')
 
+if 'nwpu' in test_datasets.keys():
+    nwpucaptions_dataset = test_datasets['nwpu']
+    nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=bartch_size, shuffle=False)
+    res = test(nwpucaptions_dataloader)
 
+    print("-------------- NWPUCaptions results --------------")
+    print(f'NWPUCaptions BLEU1: {res["bleu1"]}')
+    print(f'NWPUCaptions BLEU2: {res["bleu2"]}')
+    print(f'NWPUCaptions BLEU3: {res["bleu3"]}')
+    print(f'NWPUCaptions BLEU4: {res["bleu4"]}')
+    print(f'NWPUCaptions ROUGE: {res["rouge"]}')
+    print(f'NWPUCaptions CIDER: {res["cider"]}')
+    print(f'NWPUCaptions METEOR: {res["meteor"]}')
+    print('\n\n')
+
+if 'sidney' in test_datasets.keys():
+    sidneycaptions_dataset = test_datasets['sidney']
+    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=bartch_size, shuffle=False)
+    res = test(sidneycaptions_dataloader)
+
+    print("-------------- SidneyCaptions results --------------")
+    print(f'SidneyCaptions BLEU1: {res["bleu1"]}')
+    print(f'SidneyCaptions BLEU2: {res["bleu2"]}')
+    print(f'SidneyCaptions BLEU3: {res["bleu3"]}')
+    print(f'SidneyCaptions BLEU4: {res["bleu4"]}')
+    print(f'SidneyCaptions ROUGE: {res["rouge"]}')
+    print(f'SidneyCaptions CIDER: {res["cider"]}')
+    print(f'SidneyCaptions METEOR: {res["meteor"]}')
+    print('\n\n')

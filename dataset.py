@@ -95,56 +95,136 @@ class SidneyCaptions(Dataset):
         return dict(x=x, captions=sample["captions"])
 
 def get_datasets(transform):
+    datasets_train = []
+    datasets_val = []
 
     # RSICD datasets
-    rscid_dataset_train = RSICD(
-        root="data/rsicd/",
-        split="train", 
-        transform=transform
-    )
-    rscid_dataset_val = RSICD(
-        root="data/rsicd/",
-        split="val", 
-        transform=transform
-    )
+    if os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
+        rscid_dataset_train = RSICD(
+            root="data/rsicd/",
+            split="train", 
+            transform=transform
+        )
+        datasets_train.append(rscid_dataset_train)
+
+        rscid_dataset_val = RSICD(
+            root="data/rsicd/",
+            split="val", 
+            transform=transform
+        )
+        datasets_val.append(rscid_dataset_val)
+    else:
+        # warn user that RSICD dataset is not available
+        print("RSICD dataset is not available")
 
     # UCM Captions datasets
-    ucm_dataset_train = UCMCaptions(
-        root="data/ucm/",
-        split="train", 
-        transform=transform
-    )
-    ucm_dataset_val = UCMCaptions(
-        root="data/ucm/",
-        split="val", 
-        transform=transform
-    )
+    if os.path.exists("data/ucm/images/1.tif"):
+        ucm_dataset_train = UCMCaptions(
+            root="data/ucm/",
+            split="train", 
+            transform=transform
+        )
+        datasets_train.append(ucm_dataset_train)
+
+        ucm_dataset_val = UCMCaptions(
+            root="data/ucm/",
+            split="val", 
+            transform=transform
+        )
+        datasets_val.append(ucm_dataset_val)
+    else:
+        # warn user that UCM dataset is not available
+        print("UCM dataset is not available")
 
     # NWPUCaptions datasets
-    nwpucaptions_dataset_train = NWPUCaptions(
-        root="data/nwpu/",
-        split="train", 
-        transform=transform
-    )
-    nwpucaptions_dataset_val = NWPUCaptions(
-        root="data/nwpu/",
-        split="val", 
-        transform=transform
-    )
+    if os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
+        nwpucaptions_dataset_train = NWPUCaptions(
+            root="data/nwpu/",
+            split="train", 
+            transform=transform
+        )
+        datasets_train.append(nwpucaptions_dataset_train)
 
-    sydney_dataset_train = SidneyCaptions(
-        root="data/sidney/",
-        split="train", 
-        transform=transform
-    )
+        nwpucaptions_dataset_val = NWPUCaptions(
+            root="data/nwpu/",
+            split="val", 
+            transform=transform
+        )
+        datasets_val.append(nwpucaptions_dataset_val)
+    else:
+        # warn user that NWPUCaptions dataset is not available
+        print("NWPUCaptions dataset is not available")
 
-    sydney_dataset_val = SidneyCaptions(
-        root="data/sidney/",
-        split="val", 
-        transform=transform
-    )
+    # Sidney Captions datasets
+    if os.path.exists("data/sidney/images/1.tif"):
+        sydney_dataset_train = SidneyCaptions(
+            root="data/sidney/",
+            split="train", 
+            transform=transform
+        )
+        datasets_train.append(sydney_dataset_train)
 
+        sydney_dataset_val = SidneyCaptions(
+            root="data/sidney/",
+            split="val", 
+            transform=transform
+        )
+        datasets_val.append(sydney_dataset_val)
+    else:
+        # warn user that Sidney dataset is not available
+        print("Sidney dataset is not available")
 
-    dataset_train = ConcatDataset([rscid_dataset_train, ucm_dataset_train, nwpucaptions_dataset_train, sydney_dataset_train])
-    dataset_val = ConcatDataset([rscid_dataset_val, ucm_dataset_val, nwpucaptions_dataset_val, sydney_dataset_val])
-    return dataset_train, dataset_val
+    return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
+
+def get_test_datasets(transform):
+    datasets = {}
+
+    # RSICD datasets
+    if os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
+        rscid_dataset = RSICD(
+            root="data/rsicd/",
+            split="test", 
+            transform=transform
+        )
+        datasets['rsicd'] = rscid_dataset
+    else:
+        # warn user that RSICD dataset is not available
+        print("RSICD dataset is not available")
+
+    # UCM Captions datasets
+    if os.path.exists("data/ucm/images/1.tif"):
+        ucm_dataset = UCMCaptions(
+            root="data/ucm/",
+            split="test", 
+            transform=transform
+        )
+        datasets["ucm"] = ucm_dataset
+    else:
+        # warn user that UCM dataset is not available
+        print("UCM dataset is not available")
+
+    # NWPUCaptions datasets
+    if os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
+        nwpucaptions_dataset = NWPUCaptions(
+            root="data/nwpu/",
+            split="test", 
+            transform=transform
+        )
+        datasets["nwpu"] = nwpucaptions_dataset
+    else:
+        # warn user that NWPUCaptions dataset is not available
+        print("NWPUCaptions dataset is not available")
+
+    # Sidney Captions datasets
+    if os.path.exists("data/sidney/images/1.tif"):
+        sydney_dataset = SidneyCaptions(
+            root="data/sidney/",
+            split="test", 
+            transform=transform
+        )
+        datasets["sydney"] = sydney_dataset
+    else:
+        # warn user that Sidney dataset is not available
+        print("Sidney dataset is not available")
+
+    return datasets

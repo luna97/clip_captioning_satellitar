@@ -13,8 +13,19 @@ from model import ClipGPT
 from torchmetrics.text.bleu import BLEUScore
 import torch.nn as nn
 from tqdm import tqdm
+import argparse
 
-device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+# Add argument parser for hyperparameters
+parser = argparse.ArgumentParser(description='Train ClipGPT model')
+parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
+parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
+parser.add_argument('--epochs', type=int, default=20, help='Number of epochs for training')
+parser.add_argument('--lr', type=float, default=1e-6, help='Learning rate for optimizer')
+parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay for optimizer')
+parser.add_argument('--warmup_ratio', type=float, default=0.005, help='Number of warmup ratio for scheduler')
+args = parser.parse_args()
+
+device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
@@ -43,7 +54,7 @@ def collate_fn(batch):
                 for i, item in enumerate(batch)]
     return torch.stack(images), captions
 
-batch_size = 16
+batch_size = args.batch_size
 dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
@@ -64,21 +75,20 @@ def clip_loss(image_features, text_features):
     loss = (loss_img(logits, target) + loss_txt(logits.T, target)) / 2
     return loss
 
-clip_epochs = 20
-optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=1e-5, weight_decay=0.01
-                                   )
+epochs = args.clip
+optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 sched_clip = get_cosine_schedule_with_warmup(
     optimizer_clip,
-    num_warmup_steps=len(dataloader_train) * clip_epochs * 0.005,
-    num_training_steps=len(dataloader_train) * clip_epochs
+    num_warmup_steps=len(dataloader_train) * epochs * args.warmup_ratio,
+    num_training_steps=len(dataloader_train) * epochs
 )
 
 #train clip justo for one epoch
-train_pbar = tqdm(range(clip_epochs))
+train_pbar = tqdm(range(epochs))
 best_val_loss = np.inf
-for epoch in range(clip_epochs):
+for epoch in range(epochs):
     net.train()
-    epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), leave=False, desc=f'Epoch {epoch}/{clip_epochs}')
+    epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), leave=False, desc=f'Epoch {epoch}/{epochs}')
     train_losses = []
     for images, captions in epoch_bar:
         images = images.to(device)
