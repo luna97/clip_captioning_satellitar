@@ -1,0 +1,11 @@
+torch==2.4.0  
+torchvision==0.8.1 
+transformers==4.29.2
+torchmetrics==1.3.2
+nltk==3.8.1
+numpy==1.26.1
+Pillow==9.4.0
+tqdm==4.66.1
+pycocoevalcap==1.2 
+datasets==2.18.0
+git+https://github.com/openai/CLIP.git
