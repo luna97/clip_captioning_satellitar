@@ -5,7 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
-from transformers import GPT2Config, GPT2LMHeadModel, get_linear_schedule_with_warmup, AutoTokenizer, T5ForConditionalGeneration, T5Config, LlamaConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import GPT2Config, GPT2LMHeadModel, get_cosine_schedule_with_warmup
 from torchrs.datasets import RSICD
 import torch.nn as nn
 from dataset import get_datasets
@@ -24,11 +24,19 @@ dataset_train, dataset_val = get_datasets(net.preprocess_clip)
 print(f'Length of train dataset: {len(dataset_train)}')
 print(f'Length of val dataset: {len(dataset_val)}')
 
+augmentation = T.Compose([
+    T.RandomResizedCrop(224, scale=(0.9, 1.0)),
+    T.RandomHorizontalFlip(),
+    T.RandomRotation(10),
+    T.RandomAdjustSharpness(sharpness_factor=2),
+    T.RandomAutocontrast()
+])
+
 def collate_fn(batch):
     """
     select a random caption from each image
     """
-    images = [item['x'] for item in batch]
+    images = [augmentation(item['x']) for item in batch]
     # get a random caption from each image
     random_index = [np.random.randint(0, len(item['captions'])) for item in batch]
     captions = [ item['captions'][random_index[i]].replace('.', '').strip()
@@ -45,7 +53,7 @@ def clip_loss(image_features, text_features):
     contrastive loss between image and text features. 
     """
     loss_img = nn.CrossEntropyLoss()
-    loss_txt = nn.CrossEntropyLoss()
+    loss_txt = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
     text_features = text_features / text_features.norm(dim=-1, keepdim=True)
@@ -56,9 +64,10 @@ def clip_loss(image_features, text_features):
     loss = (loss_img(logits, target) + loss_txt(logits.T, target)) / 2
     return loss
 
-clip_epochs = 10
-optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=1e-6, weight_decay=0.0000001)
-sched_clip = get_linear_schedule_with_warmup(
+clip_epochs = 20
+optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=1e-5, weight_decay=0.01
+                                   )
+sched_clip = get_cosine_schedule_with_warmup(
     optimizer_clip,
     num_warmup_steps=len(dataloader_train) * clip_epochs * 0.005,
     num_training_steps=len(dataloader_train) * clip_epochs
@@ -93,9 +102,9 @@ for epoch in range(clip_epochs):
             image_features, text_features = net.train_clip(images, captions)
             loss = clip_loss(image_features, text_features)
             eval_losses.append(loss.item())
-            if loss < best_val_loss:
-                best_val_loss = loss
-                torch.save(net.clip.state_dict(), 'data/models/clip.pth')
+        if np.mean(eval_losses) < best_val_loss:
+            best_val_loss = np.mean(eval_losses)
+            torch.save(net.clip.state_dict(), 'data/models/clip.pth')
 
     train_pbar.set_postfix(train_loss_clip=np.mean(train_losses), val_loss_clip=np.mean(eval_losses))
 

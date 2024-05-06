@@ -37,23 +37,6 @@ class ClipGPT(nn.Module):
 
         self.device = device
 
-        self.gen_loss = torch.nn.CrossEntropyLoss(ignore_index=-100)
-
-    def vision_transformer(self, x):
-        x = x.type(self.clip.dtype)
-        x = self.clip.visual.conv1(x)  # shape = [*, width, grid, grid]
-        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
-        x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
-        x = torch.cat([self.clip.visual.class_embedding.to(x.dtype) 
-                       + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
-        x = x + self.clip.visual.positional_embedding.to(x.dtype)
-        x = self.clip.visual.ln_pre(x)
-
-        x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.clip.visual.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        return x
-
     def train_clip(self, images, captions):
         image_features = self.clip.encode_image(images)
         captions_clip = clip.tokenize(captions).to(images.device)
@@ -64,10 +47,7 @@ class ClipGPT(nn.Module):
         with torch.no_grad():
             captions_clip = clip.tokenize(captions).to(self.device)
             clip_embedding = self.clip.encode_text(captions_clip)
-            # clip_embedding = self.vision_transformer(images)
-            # clip_embedding = clip_embedding / clip_embedding.norm(2, dim=-1, keepdim=True)
             clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
-            # clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
             
         tokens = self.tokenizer(captions, return_tensors='pt', truncation=True, padding="longest")
         input_ids = tokens.input_ids.to(self.device)
@@ -95,14 +75,14 @@ class ClipGPT(nn.Module):
 
         att_mask = torch.cat([ones, att_mask], dim=1)
 
-        output = self.generator(
+        loss = self.generator(
             inputs_embeds=emb_cat, 
             # decoder_inputs_embeds=emb_cat,
             attention_mask=att_mask,
             labels=labels
-        )
-
-        return output.loss
+        ).loss
+        
+        return loss
     
     def get_caption(self, clip_embedding):
         clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)

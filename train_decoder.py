@@ -41,12 +41,12 @@ def collate_fn(batch):
 
 batch_size = 64
 dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
+dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
  
 epochs = 10
 optimizer_gen = torch.optim.AdamW([
-    { 'params': net.generator.parameters(), 'lr': 1e-5},
-    { 'params': net.adapted_layer.parameters(), 'lr': 1e-3}
+    { 'params': net.generator.parameters(), 'lr': 1e-6},
+    { 'params': net.adapted_layer.parameters(), 'lr': 1e-4}
 ], weight_decay=0.0000001)
 
 sched_gpt = get_linear_schedule_with_warmup(
@@ -68,7 +68,7 @@ for epoch in train_pbar:
         optimizer_gen.step()
         optimizer_gen.zero_grad()
         sched_gpt.step()
-
+        
         epoch_bar.set_postfix(loss_gpt=loss.item())
 
     # evaluate the model
@@ -76,23 +76,18 @@ for epoch in train_pbar:
     scores = []
     with torch.no_grad():
         val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation {epoch}/{epochs}')
-        for batch in val_pbar:
+        for captions in val_pbar:
             clip_embedding = net.clip.encode_text(clip.tokenize(captions).to(device))
             res = net.get_caption(clip_embedding)
-            captions = batch['captions']
-
-            # reshape captions from [num_captions, batch size] to [batch size, num_captions]
-            captions = [ [captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
 
             bleu_score = bleu_scorer(res, captions)
             scores.append(bleu_score)
 
-            # save the model if the score is better
-            if bleu_score > best_score:
-                best_score = bleu_score
-                torch.save(net.state_dict(), 'data/models/full.pth')
+        # save the model if the score is better
+        if np.mean(scores) > best_score:
+            best_score = np.mean(scores)
+            torch.save(net.state_dict(), 'data/models/full.pth')
 
-            
 
     train_pbar.set_postfix(train_loss_gpt=np.mean(train_losses), val_bleu=np.mean(scores))
             
