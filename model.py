@@ -54,12 +54,12 @@ class ClipGPT(nn.Module):
         att_mask = tokens.attention_mask.to(self.device)
 
         # add a one at the first zero of the attention mask to include on EOF token
-        for i in range(att_mask.shape[0]):
-            first_zero = torch.where(att_mask[i] == 0)[0]
-            if len(first_zero) > 0:
-                att_mask[i, first_zero[0]] = 1
+        # for i in range(att_mask.shape[0]):
+        #    first_zero = torch.where(att_mask[i] == 0)[0]
+        #    if len(first_zero) > 0:
+        #         att_mask[i, first_zero[0]] = 1
 
-        # set padding tokens to -100
+        # set padding tokens to -100 so they are not considered in the loss
         input_ids[~att_mask.bool()] = -100
 
         # clip_embedding = clip_embedding.unsqueeze(1)
@@ -69,20 +69,20 @@ class ClipGPT(nn.Module):
         elif self.generator_type == 't5':
             gen_embeddings = self.generator.shared(input_ids)
 
+        # add clip embedding to the embeddings of the caption
         emb_cat = torch.cat([clip_embedding, gen_embeddings], dim=1)
         ones = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).to(self.device)
-        labels = torch.cat([ones - 101, input_ids], dim=1)
+        labels = torch.cat([ones, input_ids], dim=1)
 
         att_mask = torch.cat([ones, att_mask], dim=1)
 
-        loss = self.generator(
+        return self.generator(
             inputs_embeds=emb_cat, 
-            # decoder_inputs_embeds=emb_cat,
+            # decoder_inputs_embeds=emb_cat, # only for t5
             attention_mask=att_mask,
             labels=labels
         ).loss
-        
-        return loss
+
     
     def get_caption(self, clip_embedding):
         clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
