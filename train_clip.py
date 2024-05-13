@@ -2,7 +2,7 @@ import torch
 import os
 import numpy as np
 from PIL import Image
-from torch.utils.data import Dataset, ConcatDataset
+from torch.utils.data import Dataset
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 from transformers import GPT2Config, GPT2LMHeadModel, get_cosine_schedule_with_warmup
@@ -30,11 +30,11 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
-dataset_train = get_datasets(net.preprocess_clip, combine=True)
+dataset_train, dataset_val = get_datasets(net.preprocess_clip)
 dataset_test = get_test_datasets(net.preprocess_clip)
 
 print(f'Length of train dataset: {len(dataset_train)}')
-print(f'Length of val dataset: {len(dataset_test)}')
+print(f'Length of val dataset: {len(dataset_val)}')
 
 augmentation = T.Compose([
     T.RandomResizedCrop(224, scale=(0.9, 1.0)),
@@ -57,7 +57,7 @@ def collate_fn(batch):
 
 batch_size = args.batch_size
 dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
 # train clip in a contrastive way with the captions
 def clip_loss(image_features, text_features):
@@ -107,7 +107,7 @@ for epoch in range(epochs):
     net.eval()
     eval_losses = []
     with torch.no_grad():
-        val_pbar = tqdm(dataloader_test, total=len(dataloader_test), leave=False, desc=f'Validation')
+        val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation')
         for images, captions in val_pbar:
             images = images.to(device)
             image_features, text_features = net.train_clip(images, captions)

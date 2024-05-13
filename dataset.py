@@ -94,7 +94,7 @@ class SidneyCaptions(Dataset):
         x = self.transform(x)
         return dict(x=x, captions=sample["captions"])
 
-def get_datasets(transform, combine=False):
+def get_datasets(transform):
     datasets_train = []
     datasets_val = []
 
@@ -174,10 +174,7 @@ def get_datasets(transform, combine=False):
         # warn user that Sidney dataset is not available
         print("Sidney dataset is not available")
 
-    if combine:
-        return ConcatDataset(datasets_train + datasets_val)
-    else:
-        return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
+    return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
 
 def get_test_datasets(transform):
     datasets = {}
