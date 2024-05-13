@@ -19,9 +19,9 @@ import argparse
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-5, help='Learning rate for generator')
+parser.add_argument('--lr_gen', type=float, default=1e-6, help='Learning rate for generator')
 parser.add_argument('--lr_adapter', type=float, default=1e-4, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=0.0000001, help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=0.001, help='Weight decay for optimizer')
 parser.add_argument('--warmup_ratio', type=float, default=0.0005, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
 
@@ -51,7 +51,8 @@ def collate_fn(batch):
     images = [item['x'] for item in batch]
     # get a random caption from each image
     random_index = [np.random.randint(0, len(item['captions'])) for item in batch]
-    captions = [ item['captions'][random_index[i]].replace('.', '').strip() for i, item in enumerate(batch)]
+    captions = [ item['captions'][random_index[i]].replace('.', '').strip()
+                 for i, item in enumerate(batch)]
     return captions, torch.stack(images)
 
 batch_size = args.batch_size
@@ -103,8 +104,10 @@ for epoch in train_pbar:
 
                 # print captions
                 print('Captions:')
-                for res in results:
-                    print(res)
+                for res, cap in zip(results, captions):
+                    print('prediction: ', res)
+                    print('target: ', cap)
+                    print('')
 
         # save the model if the score is better
         if np.mean(scores) > best_score:

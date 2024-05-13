@@ -94,7 +94,7 @@ class SidneyCaptions(Dataset):
         x = self.transform(x)
         return dict(x=x, captions=sample["captions"])
 
-def get_datasets(transform):
+def get_datasets(transform, combine=False):
     datasets_train = []
     datasets_val = []
 
@@ -155,7 +155,6 @@ def get_datasets(transform):
         # warn user that NWPUCaptions dataset is not available
         print("NWPUCaptions dataset is not available")
 
-    """
     # Sidney Captions datasets
     if os.path.exists("data/sidney/images/1.tif"):
         sydney_dataset_train = SidneyCaptions(
@@ -175,8 +174,10 @@ def get_datasets(transform):
         # warn user that Sidney dataset is not available
         print("Sidney dataset is not available")
 
-    """
-    return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
+    if combine:
+        return ConcatDataset(datasets_train + datasets_val)
+    else:
+        return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
 
 def get_test_datasets(transform):
     datasets = {}

@@ -2,13 +2,13 @@ import torch
 import os
 import numpy as np
 from PIL import Image
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
 from transformers import GPT2Config, GPT2LMHeadModel, get_cosine_schedule_with_warmup
 from torchrs.datasets import RSICD
 import torch.nn as nn
-from dataset import get_datasets
+from dataset import get_datasets, get_test_datasets
 from model import ClipGPT
 from torchmetrics.text.bleu import BLEUScore
 import torch.nn as nn
@@ -18,10 +18,10 @@ import argparse
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train ClipGPT model')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
-parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
+parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=20, help='Number of epochs for training')
 parser.add_argument('--lr', type=float, default=1e-6, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=1e-8, help='Weight decay for optimizer')
 parser.add_argument('--warmup_ratio', type=float, default=0.005, help='Number of warmup ratio for scheduler')
 args = parser.parse_args()
 
@@ -30,10 +30,11 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
-dataset_train, dataset_val = get_datasets(net.preprocess_clip)
+dataset_train = get_datasets(net.preprocess_clip, combine=True)
+dataset_test = get_test_datasets(net.preprocess_clip)
 
 print(f'Length of train dataset: {len(dataset_train)}')
-print(f'Length of val dataset: {len(dataset_val)}')
+print(f'Length of val dataset: {len(dataset_test)}')
 
 augmentation = T.Compose([
     T.RandomResizedCrop(224, scale=(0.9, 1.0)),
@@ -56,7 +57,7 @@ def collate_fn(batch):
 
 batch_size = args.batch_size
 dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+dataloader_test = DataLoader(dataset_test, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
 # train clip in a contrastive way with the captions
 def clip_loss(image_features, text_features):
@@ -64,7 +65,7 @@ def clip_loss(image_features, text_features):
     contrastive loss between image and text features. 
     """
     loss_img = nn.CrossEntropyLoss()
-    loss_txt = nn.CrossEntropyLoss(label_smoothing=0.1)
+    loss_txt = nn.CrossEntropyLoss()
 
     image_features = image_features / image_features.norm(dim=-1, keepdim=True)
     text_features = text_features / text_features.norm(dim=-1, keepdim=True)
@@ -75,7 +76,7 @@ def clip_loss(image_features, text_features):
     loss = (loss_img(logits, target) + loss_txt(logits.T, target)) / 2
     return loss
 
-epochs = args.clip
+epochs = args.epochs
 optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 sched_clip = get_cosine_schedule_with_warmup(
     optimizer_clip,
@@ -106,7 +107,7 @@ for epoch in range(epochs):
     net.eval()
     eval_losses = []
     with torch.no_grad():
-        val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation')
+        val_pbar = tqdm(dataloader_test, total=len(dataloader_test), leave=False, desc=f'Validation')
         for images, captions in val_pbar:
             images = images.to(device)
             image_features, text_features = net.train_clip(images, captions)
