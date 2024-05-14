@@ -11,9 +11,9 @@ from pycocoevalcap.cider.cider import Cider
 from nltk.translate.meteor_score import meteor_score as Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.bleu.bleu import Bleu
+from pycocoevalcap.spice.spice import Spice
 import numpy as np
-import datasets
-
+from dataset import get_test_datasets
 
 path = 'data/models/full.pth'
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -21,28 +21,23 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
-test_datasets = datasets.get_test_datasets(net.preprocess_clip)
+test_datasets = get_test_datasets(net.preprocess_clip)
 
 # load datasets
 bartch_size = 16
 
-bleu1_scorer = Bleu(n=1)
-bleu2_scorer = Bleu(n=2)
-bleu3_scorer = Bleu(n=3)
-bleu4_scorer = Bleu(n=4)
+bleu_scorer = Bleu(n=4)
 
 cider_scorer = Cider()
 rouge_scorer = Rouge()
+spice_scorer = Spice()
 
 def test(dataloader):
     net.eval()
-    blue1_scores = []
-    blue2_scores = []  
-    blue3_scores = []  
-    blue4_scores = []  
-    rouge_scores = []
-    cider_scores = []
-    meteor_scores = []
+
+    refs = {}
+    res = {}
+
     count = 0
     with torch.no_grad():
         for batch in tqdm(dataloader):
@@ -53,40 +48,33 @@ def test(dataloader):
             clip_embeddings = net.clip.encode_image(images)
             results = net.get_caption(clip_embeddings)
 
-            refs = {count + i: captions[i] for i in range(len(captions))}
-            res = {count + i: [results[i]] for i in range(len(results))}
-            
-            bleu1_score = bleu1_scorer.compute_score(refs, res, verbose=False)[0][0]
-            blue1_scores.append(bleu1_score)
-
-            bleu2_score = bleu2_scorer.compute_score(refs, res, verbose=False)[0][0]  # Compute blue2 score
-            blue2_scores.append(bleu2_score)
-
-            bleu3_score = bleu3_scorer.compute_score(refs, res, verbose=False)[0][0]  # Compute blue3 score
-            blue3_scores.append(bleu3_score)
-
-            bleu4_score = bleu4_scorer.compute_score(refs, res, verbose=False)[0][0]  # Compute blue4 score
-            blue4_scores.append(bleu4_score)
-
-            rouge_score = rouge_scorer.compute_score(refs, res)[0]
-            rouge_scores.append(rouge_score)
-
-            cider_score = cider_scorer.compute_score(refs, res)[0]
-            cider_scores.append(cider_score)
-
-            meteor_score = Meteor(captions, results)  # Compute meteor score
-            meteor_scores.append(meteor_score)
+            for i in range(len(captions)):
+                refs[count + i] = captions[i]
+                res[count + i] = [results[i]]
 
             count += len(captions)
 
+        bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0]
+        print('Bleu: ', bleu_score)
+
+        rouge_score, _ = rouge_scorer.compute_score(refs, res)
+        print('Rouge: ', rouge_score)
+
+        cider_score, _ = cider_scorer.compute_score(refs, res)
+        print('Cider: ', cider_score)
+
+        meteor_score = Meteor(captions, results)  # Compute meteor score
+        print('Meteor: ', meteor_score)
+
+
     return {
-        'bleu1': np.mean(blue1_scores),
-        'bleu2': np.mean(blue2_scores),  # Add bleu2 score
-        'bleu3': np.mean(blue3_scores),  # Add bleu3 score
-        'bleu4': np.mean(blue4_scores),  # Add bleu4 score
-        'rouge': np.mean(rouge_scores),
-        'cider': np.mean(cider_scores),
-        'meteor': np.mean(meteor_scores),
+        'bleu1': bleu_score[0],
+        'bleu2': bleu_score[1],
+        'bleu3': bleu_score[2],
+        'bleu4': bleu_score[3],
+        'rouge': rouge_score,
+        'cider': cider_score,
+        'meteor': meteor_score
     }
 
 if 'rsicd' in test_datasets.keys():

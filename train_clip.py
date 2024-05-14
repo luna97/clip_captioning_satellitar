@@ -18,11 +18,11 @@ import argparse
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train ClipGPT model')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
-parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training')
+parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=20, help='Number of epochs for training')
-parser.add_argument('--lr', type=float, default=1e-6, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=1e-8, help='Weight decay for optimizer')
-parser.add_argument('--warmup_ratio', type=float, default=0.005, help='Number of warmup ratio for scheduler')
+parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate for optimizer')
+parser.add_argument('--weight_decay', type=float, default=1e-2, help='Weight decay for optimizer')
+parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
 args = parser.parse_args()
 
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -37,7 +37,6 @@ print(f'Length of train dataset: {len(dataset_train)}')
 print(f'Length of val dataset: {len(dataset_val)}')
 
 augmentation = T.Compose([
-    T.RandomResizedCrop(224, scale=(0.9, 1.0)),
     T.RandomHorizontalFlip(),
     T.RandomRotation(10),
     T.RandomAdjustSharpness(sharpness_factor=2),
@@ -80,7 +79,7 @@ epochs = args.epochs
 optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 sched_clip = get_cosine_schedule_with_warmup(
     optimizer_clip,
-    num_warmup_steps=len(dataloader_train) * epochs * args.warmup_ratio,
+    num_warmup_steps=args.warmup_steps,
     num_training_steps=len(dataloader_train) * epochs
 )
 

@@ -19,11 +19,11 @@ import argparse
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-6, help='Learning rate for generator')
-parser.add_argument('--lr_adapter', type=float, default=1e-4, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=0.001, help='Weight decay for optimizer')
-parser.add_argument('--warmup_ratio', type=float, default=0.0005, help='Number of warmup ratio for scheduler')
-parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
+parser.add_argument('--lr_gen', type=float, default=1e-4, help='Learning rate for generator')
+parser.add_argument('--lr_adapter', type=float, default=1e-3, help='Learning rate for adapted layer')
+parser.add_argument('--weight_decay', type=float, default=1e-05, help='Weight decay for optimizer')
+parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
+parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training')
 
 args = parser.parse_args()
 
@@ -51,7 +51,7 @@ def collate_fn(batch):
     images = [item['x'] for item in batch]
     # get a random caption from each image
     random_index = [np.random.randint(0, len(item['captions'])) for item in batch]
-    captions = [ item['captions'][random_index[i]].replace('.', '').strip()
+    captions = [ item['captions'][random_index[i]] # .replace('.', '').strip()
                  for i, item in enumerate(batch)]
     return captions, torch.stack(images)
 
@@ -67,7 +67,7 @@ optimizer_gen = torch.optim.AdamW([
 
 sched_gpt = get_linear_schedule_with_warmup(
     optimizer_gen,
-    num_warmup_steps=len(dataloader_train) * epochs * args.warmup_ratio, 
+    num_warmup_steps=args.warmup_steps, 
     num_training_steps=len(dataloader_train) * epochs
 )
 best_score = 0
@@ -77,8 +77,9 @@ for epoch in train_pbar:
     net.train()
     train_losses = []
     epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), desc=f'Epoch {epoch}/{epochs}', leave=False)
-    for captions, _ in epoch_bar:
-        loss = net.train_generator(captions)
+    for captions, images in epoch_bar:
+        images = images.to(device)
+        loss = net.train_generator(captions, images=images)
         loss.backward()
         train_losses.append(loss.item())
         optimizer_gen.step()
@@ -93,7 +94,8 @@ for epoch in train_pbar:
     with torch.no_grad():
         val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation {epoch}/{epochs}')
         for i, (captions, images) in enumerate(val_pbar):
-            loss = net.train_generator(captions)
+            images = images.to(device)
+            loss = net.train_generator(captions, images=images)
             scores.append(loss.item())
 
             if i == 0:
