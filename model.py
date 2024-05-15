@@ -6,7 +6,7 @@ from transformers import StoppingCriteria, StoppingCriteriaList
 
 
 class ClipGPT(nn.Module):
-    def __init__(self, device, generator='gpt2', prefix_size=512, prefix_length=4, dropout=0.1):
+    def __init__(self, device, generator='gpt2', dropout=0.0):
         super(ClipGPT, self).__init__()
         if generator == 'gpt2':
             gpt2_config = GPT2Config.from_pretrained('gpt2')
@@ -21,10 +21,7 @@ class ClipGPT(nn.Module):
         
         self.adapted_layer = nn.Sequential(
             nn.Dropout(dropout),
-            nn.Linear(prefix_size, self.gen_embedding_size * prefix_length // 2),
-            nn.Tanh(),
-            nn.Dropout(dropout),
-            nn.Linear(self.gen_embedding_size * prefix_length // 2, self.gen_embedding_size * prefix_length)
+            nn.Linear(512, self.gen_embedding_size),
         )
         # self.dropout = nn.Dropout(dropout)
 
@@ -35,8 +32,6 @@ class ClipGPT(nn.Module):
         self.preprocess_clip = preprocess
 
         self.generator_type = generator
-        self.prefix_length = prefix_length
-        self.prefix_size = prefix_size
 
         self.device = device
 
@@ -61,7 +56,6 @@ class ClipGPT(nn.Module):
             gen_embeddings = self.generator.transformer.wte(input_ids)
 
         clip_embedding = self.adapted_layer(clip_embedding.detach())
-        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
   
         # Concatenate CLIP embeddings with generator embeddings
         emb_cat = torch.cat([clip_embedding, gen_embeddings], dim=1)
@@ -73,7 +67,7 @@ class ClipGPT(nn.Module):
         ones = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).long().to(self.device)
 
         with torch.no_grad():
-            input_ids[~att_mask.bool()] = -100 
+            # input_ids[~att_mask.bool()] = -100 
             labels = torch.cat([ones - 101, input_ids], dim=1)
 
         # positional embedding are automatically added by the model

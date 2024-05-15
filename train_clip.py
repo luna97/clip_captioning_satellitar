@@ -63,6 +63,7 @@ def clip_loss(image_features, text_features):
     """
     contrastive loss between image and text features. 
     """
+    
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
 
