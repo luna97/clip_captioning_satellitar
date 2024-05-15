@@ -5,7 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms as T
 from torch.utils.data import DataLoader
-from transformers import GPT2Config, GPT2LMHeadModel, get_linear_schedule_with_warmup, AutoTokenizer, T5ForConditionalGeneration, T5Config, LlamaConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import get_cosine_schedule_with_warmup
 from torchrs.datasets import RSICD
 import torch.nn as nn
 from dataset import get_datasets
@@ -14,18 +14,18 @@ from torchmetrics.text.bleu import BLEUScore
 from tqdm import tqdm
 import clip
 import argparse
-
-torch.autograd.set_detect_anomaly(True)
+from huggingface_hub import hf_hub_download
 
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-4, help='Learning rate for generator')
+parser.add_argument('--lr_gen', type=float, default=1e-5, help='Learning rate for generator')
 parser.add_argument('--lr_adapter', type=float, default=1e-3, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=1e-05, help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=0., help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
+parser.add_argument('--use_remote_clip', action='store_true', help='Use remote clip model')
 
 args = parser.parse_args()
 
@@ -34,10 +34,13 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
-# assert path exists
-assert os.path.exists('data/models/clip.pth')
-
-net.clip.load_state_dict(torch.load('data/models/clip.pth', map_location=device))
+if args.use_remote_clip:
+    checkpoint_path = hf_hub_download("chendelong/RemoteCLIP", "RemoteCLIP-ViT-B-32.pt", cache_dir='checkpoints')
+    net.clip.load_state_dict(torch.load(checkpoint_path, map_location=device))
+else:
+    # assert path exists
+    assert os.path.exists('data/models/clip.pth')
+    net.clip.load_state_dict(torch.load('data/models/clip.pth', map_location=device))
 
 dataset_train, dataset_val = get_datasets(net.preprocess_clip)
 
@@ -67,7 +70,7 @@ optimizer_gen = torch.optim.AdamW([
     { 'params': net.adapted_layer.parameters(), 'lr': args.lr_adapter}
 ], weight_decay=args.weight_decay)
 
-sched_gpt = get_linear_schedule_with_warmup(
+sched_gpt = get_cosine_schedule_with_warmup(
     optimizer_gen,
     num_warmup_steps=args.warmup_steps, 
     num_training_steps=len(dataloader_train) * epochs

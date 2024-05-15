@@ -14,15 +14,16 @@ from torchmetrics.text.bleu import BLEUScore
 import torch.nn as nn
 from tqdm import tqdm
 import argparse
+from torch.cuda.amp import GradScaler
 
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train ClipGPT model')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=30, help='Number of epochs for training')
-parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay for optimizer')
-parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
+parser.add_argument('--lr', type=float, default=3e-6, help='Learning rate for optimizer')
+parser.add_argument('--weight_decay', type=float, default=0., help='Weight decay for optimizer')
+parser.add_argument('--warmup_steps', type=float, default=10, help='Number of warmup ratio for scheduler')
 args = parser.parse_args()
 
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -84,21 +85,31 @@ sched_clip = get_cosine_schedule_with_warmup(
     num_training_steps=len(dataloader_train) * epochs
 )
 
-#train clip justo for one epoch
+if device == 'cuda':
+    scaler = GradScaler()
+
 train_pbar = tqdm(range(epochs))
 best_val_loss = np.inf
-for epoch in range(epochs):
+for epoch in train_pbar:
     net.train()
-    epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), leave=False, desc=f'Epoch {epoch}/{epochs}')
+    epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), desc=f'Epoch {epoch}/{epochs}')
     train_losses = []
     for images, captions in epoch_bar:
         images = images.to(device)
         image_features, text_features = net.train_clip(images, captions)
 
         loss = clip_loss(image_features, text_features)
-        loss.backward()
-        optimizer_clip.step()
-        optimizer_clip.zero_grad()
+
+        # Backpropagation with gradient scaling
+        if device == 'cuda':
+            scaler.scale(loss).backward()
+            scaler.step(optimizer_clip)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer_clip.step()
+            optimizer_clip.zero_grad()
+
         sched_clip.step()
 
         epoch_bar.set_postfix(loss_clip=loss.item())
@@ -107,7 +118,7 @@ for epoch in range(epochs):
     net.eval()
     eval_losses = []
     with torch.no_grad():
-        val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation')
+        val_pbar = tqdm(dataloader_val, total=len(dataloader_val), desc=f'Validation')
         for images, captions in val_pbar:
             images = images.to(device)
             image_features, text_features = net.train_clip(images, captions)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import clip
-from transformers import GPT2LMHeadModel, GPT2Config, T5ForConditionalGeneration, T5Config, AutoTokenizer
+from transformers import GPT2LMHeadModel, GPT2Config, GPT2Tokenizer
 from transformers import StoppingCriteria, StoppingCriteriaList
 
 
@@ -13,8 +13,9 @@ class ClipGPT(nn.Module):
             gpt2_config.resid_pdrop=dropout
             gpt2_config.embd_pdrop=dropout
             self.generator  = GPT2LMHeadModel.from_pretrained('gpt2', config=gpt2_config)
-            self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
-            self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+            self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
             self.gen_embedding_size = self.generator.transformer.wte.weight.shape[1]
         else:
             raise ValueError('Generator not supported')
@@ -55,7 +56,7 @@ class ClipGPT(nn.Module):
             att_mask = tokens.attention_mask.to(self.device)
             gen_embeddings = self.generator.transformer.wte(input_ids)
 
-        clip_embedding = self.adapted_layer(clip_embedding.detach())
+        clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
   
         # Concatenate CLIP embeddings with generator embeddings
         emb_cat = torch.cat([clip_embedding, gen_embeddings], dim=1)
@@ -80,7 +81,7 @@ class ClipGPT(nn.Module):
     
     def get_caption(self, clip_embedding):
         clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
-        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
+        # clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
 
         # adding positional embeddings, I need it only here
         pos_emb = self.generator.transformer.wpe(torch.arange(clip_embedding.shape[1]).to(self.device))
