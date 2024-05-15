@@ -19,9 +19,9 @@ import argparse
 parser = argparse.ArgumentParser(description='Train ClipGPT model')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-parser.add_argument('--epochs', type=int, default=20, help='Number of epochs for training')
+parser.add_argument('--epochs', type=int, default=30, help='Number of epochs for training')
 parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=1e-2, help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
 args = parser.parse_args()
 

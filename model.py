@@ -6,7 +6,7 @@ from transformers import StoppingCriteria, StoppingCriteriaList
 
 
 class ClipGPT(nn.Module):
-    def __init__(self, device, generator='gpt2', prefix_size=512, prefix_length=4, dropout=0.2):
+    def __init__(self, device, generator='gpt2', prefix_size=512, prefix_length=4, dropout=0.1):
         super(ClipGPT, self).__init__()
         if generator == 'gpt2':
             gpt2_config = GPT2Config.from_pretrained('gpt2')
@@ -16,18 +16,17 @@ class ClipGPT(nn.Module):
             self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
             self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
             self.gen_embedding_size = self.generator.transformer.wte.weight.shape[1]
-        elif generator == 't5':
-            t5_config = T5Config.from_pretrained('t5-small')
-            self.generator = T5ForConditionalGeneration.from_pretrained('t5-small', config=t5_config)
-            self.tokenizer = AutoTokenizer.from_pretrained("t5-small")
-            self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-            self.gen_embedding_size = self.generator.shared.weight.shape[1]
         else:
             raise ValueError('Generator not supported')
         
-        self.adapted_layer = nn.Linear(prefix_size, self.gen_embedding_size * prefix_length)
-        self.dropout = nn.Dropout(dropout)
-
+        self.adapted_layer = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(prefix_size, self.gen_embedding_size * prefix_length // 2),
+            nn.Tanh(),
+            nn.Dropout(dropout),
+            nn.Linear(self.gen_embedding_size * prefix_length // 2, self.gen_embedding_size * prefix_length)
+        )
+        # self.dropout = nn.Dropout(dropout)
 
         clip_model, preprocess = clip.load("ViT-B/32", device=device)
         # use full precision for the model
@@ -48,65 +47,50 @@ class ClipGPT(nn.Module):
         return image_features, text_features
     
     def train_generator(self, captions=None, images=None):
+    # Encode images or text to get CLIP embeddings
         with torch.no_grad():
             if images is not None:
                 clip_embedding = self.clip.encode_image(images)
-                clip_embedding = self.dropout(clip_embedding)
-                clip_embedding = self.adapted_layer(clip_embedding.detach())
             else:
                 captions_clip = clip.tokenize(captions).to(self.device)
                 clip_embedding = self.clip.encode_text(captions_clip)
-                clip_embedding = self.dropout(clip_embedding)
-                clip_embedding = self.adapted_layer(clip_embedding.detach())
-
-        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
-            
-        tokens = self.tokenizer(captions, return_tensors='pt', truncation=True, padding="longest")
-        input_ids = tokens.input_ids.to(self.device)
-        att_mask = tokens.attention_mask.to(self.device)
-
-        # add a one at the first zero of the attention mask to include on EOF token
-        # for i in range(att_mask.shape[0]):
-        #    first_zero = torch.where(att_mask[i] == 0)[0]
-        #    if len(first_zero) > 0:
-        #         att_mask[i, first_zero[0]] = 1
-
-        # set padding tokens to -100 so they are not considered in the loss
-        # input_ids[~att_mask.bool()] = -100
-
-        # clip_embedding = clip_embedding.unsqueeze(1)
-        if self.generator_type == 'gpt2':
+          
+            tokens = self.tokenizer(captions, return_tensors='pt', truncation=True, padding="longest")
+            input_ids = tokens.input_ids.to(self.device)
+            att_mask = tokens.attention_mask.to(self.device)
             gen_embeddings = self.generator.transformer.wte(input_ids)
-            # add start token
-        elif self.generator_type == 't5':
-            gen_embeddings = self.generator.shared(input_ids)
 
-
-        # add clip embedding to the embeddings of the caption
+        clip_embedding = self.adapted_layer(clip_embedding.detach())
+        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
+  
+        # Concatenate CLIP embeddings with generator embeddings
         emb_cat = torch.cat([clip_embedding, gen_embeddings], dim=1)
-        ones = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).to(self.device)
-        labels = torch.cat([ones, input_ids], dim=1)
 
-        # add positional embeddings
-        pos_emb = self.generator.transformer.wpe(torch.arange(emb_cat.shape[0]).to(self.device))
-        emb_cat = emb_cat + pos_emb.unsqueeze(1)
+        # Create an attention mask for the concatenated embeddings
+        clip_attention_mask = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).to(self.device)
+        combined_att_mask = torch.cat([clip_attention_mask, att_mask], dim=1)
 
-        att_mask = torch.cat([ones, att_mask], dim=1)
+        ones = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).long().to(self.device)
 
+        with torch.no_grad():
+            input_ids[~att_mask.bool()] = -100 
+            labels = torch.cat([ones - 101, input_ids], dim=1)
+
+        # positional embedding are automatically added by the model
         return self.generator(
             inputs_embeds=emb_cat, 
-            # decoder_inputs_embeds=emb_cat, # only for t5
-            attention_mask=att_mask,
+            attention_mask=combined_att_mask,
             labels=labels
         ).loss
 
     
     def get_caption(self, clip_embedding):
         clip_embedding = self.adapted_layer(clip_embedding.detach()).unsqueeze(1)
-        pos_emb = self.generator.transformer.wpe(torch.arange(clip_embedding.shape[0]).to(self.device))
+        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
 
-        # add positional embeddings
-        clip_embedding = clip_embedding + pos_emb.unsqueeze(1)
+        # adding positional embeddings, I need it only here
+        pos_emb = self.generator.transformer.wpe(torch.arange(clip_embedding.shape[1]).to(self.device))
+        clip_embedding = clip_embedding + pos_emb.unsqueeze(0)
         
         # stopping_criteria = StoppingCriteriaList([StopOnTokens(stop_token_ids)])
 

@@ -15,6 +15,8 @@ from tqdm import tqdm
 import clip
 import argparse
 
+torch.autograd.set_detect_anomaly(True)
+
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
@@ -23,7 +25,7 @@ parser.add_argument('--lr_gen', type=float, default=1e-4, help='Learning rate fo
 parser.add_argument('--lr_adapter', type=float, default=1e-3, help='Learning rate for adapted layer')
 parser.add_argument('--weight_decay', type=float, default=1e-05, help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
-parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training')
+parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
 
 args = parser.parse_args()
 
@@ -85,7 +87,6 @@ for epoch in train_pbar:
         optimizer_gen.step()
         optimizer_gen.zero_grad()
         sched_gpt.step()
-        
         epoch_bar.set_postfix(loss_gpt=loss.item())
 
     # evaluate the model
