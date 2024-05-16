@@ -22,7 +22,7 @@ parser.add_argument('--device', type=str, default=None, help='Device to use for 
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=30, help='Number of epochs for training')
 parser.add_argument('--lr', type=float, default=3e-6, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=0., help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=1e-08, help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=10, help='Number of warmup ratio for scheduler')
 args = parser.parse_args()
 
@@ -41,7 +41,9 @@ augmentation = T.Compose([
     T.RandomHorizontalFlip(),
     T.RandomRotation(10),
     T.RandomAdjustSharpness(sharpness_factor=2),
-    T.RandomAutocontrast()
+    T.RandomAutocontrast(),
+    T.RandomAffine(degrees=10, translate=(0.1, 0.1)),
+    T.RandomErasing(p=0.1),
 ])
 
 def collate_fn(batch):

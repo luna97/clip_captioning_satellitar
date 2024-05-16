@@ -94,12 +94,12 @@ class SidneyCaptions(Dataset):
         x = self.transform(x)
         return dict(x=x, captions=sample["captions"])
 
-def get_datasets(transform):
+def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
     datasets_train = []
     datasets_val = []
 
     # RSICD datasets
-    if os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
+    if "rsicd" in dataset_names and os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
         rscid_dataset_train = RSICD(
             root="data/rsicd/",
             split="train", 
@@ -113,12 +113,12 @@ def get_datasets(transform):
             transform=transform
         )
         datasets_val.append(rscid_dataset_val)
-    else:
+    elif "rsicd" in dataset_names:
         # warn user that RSICD dataset is not available
         print("RSICD dataset is not available")
 
     # UCM Captions datasets
-    if os.path.exists("data/ucm/images/1.tif"):
+    if "ucm" in dataset_names and os.path.exists("data/ucm/images/1.tif"):
         ucm_dataset_train = UCMCaptions(
             root="data/ucm/",
             split="train", 
@@ -132,12 +132,12 @@ def get_datasets(transform):
             transform=transform
         )
         datasets_val.append(ucm_dataset_val)
-    else:
+    elif "ucm" in dataset_names:
         # warn user that UCM dataset is not available
         print("UCM dataset is not available")
 
     # NWPUCaptions datasets
-    if os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
+    if "nwpu" in dataset_names and os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
         nwpucaptions_dataset_train = NWPUCaptions(
             root="data/nwpu/",
             split="train", 
@@ -151,12 +151,12 @@ def get_datasets(transform):
             transform=transform
         )
         datasets_val.append(nwpucaptions_dataset_val)
-    else:
+    elif "nwpu" in dataset_names:
         # warn user that NWPUCaptions dataset is not available
         print("NWPUCaptions dataset is not available")
 
     # Sidney Captions datasets
-    if os.path.exists("data/sidney/images/1.tif"):
+    if "sydney" in dataset_names and os.path.exists("data/sidney/images/1.tif"):
         sydney_dataset_train = SidneyCaptions(
             root="data/sidney/",
             split="train", 
@@ -170,7 +170,7 @@ def get_datasets(transform):
             transform=transform
         )
         datasets_val.append(sydney_dataset_val)
-    else:
+    elif "sydney" in dataset_names:
         # warn user that Sidney dataset is not available
         print("Sidney dataset is not available")
 

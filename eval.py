@@ -15,6 +15,9 @@ from pycocoevalcap.spice.spice import Spice
 import numpy as np
 from dataset import get_test_datasets
 
+import nltk
+nltk.download('wordnet')
+
 path = 'data/models/full.pth'
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 print(f'Using device: {device}')
@@ -48,23 +51,21 @@ def test(dataloader):
             clip_embeddings = net.clip.encode_image(images)
             results = net.get_caption(clip_embeddings)
 
-            for i in range(len(captions)):
-                refs[count + i] = captions[i]
-                res[count + i] = [results[i]]
+            for c in range(len(captions)):
+                refs[count + c] = captions[c]
+                res[count + c] = [results[c]]
 
             count += len(captions)
 
         bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0]
-        print('Bleu: ', bleu_score)
 
         rouge_score, _ = rouge_scorer.compute_score(refs, res)
-        print('Rouge: ', rouge_score)
 
         cider_score, _ = cider_scorer.compute_score(refs, res)
-        print('Cider: ', cider_score)
+
+        # spice_score, _ = spice_scorer.compute_score(refs, res)
 
         meteor_score = Meteor(captions, results)  # Compute meteor score
-        print('Meteor: ', meteor_score)
 
 
     return {
@@ -74,7 +75,8 @@ def test(dataloader):
         'bleu4': bleu_score[3],
         'rouge': rouge_score,
         'cider': cider_score,
-        'meteor': meteor_score
+        'meteor': meteor_score,
+        #'spice': spice_score
     }
 
 if 'rsicd' in test_datasets.keys():
@@ -90,6 +92,7 @@ if 'rsicd' in test_datasets.keys():
     print(f'RSICD ROUGE: {res["rouge"]}')
     print(f'RSICD CIDER: {res["cider"]}')
     print(f'RSICD METEOR: {res["meteor"]}')
+    # print(f'RSICD SPICE: {res["spice"]}')
     print('\n\n')
 
 if 'ucm' in test_datasets.keys():
@@ -105,6 +108,7 @@ if 'ucm' in test_datasets.keys():
     print(f'UCM ROUGE: {res["rouge"]}')
     print(f'UCM CIDER: {res["cider"]}')
     print(f'UCM METEOR: {res["meteor"]}')
+    # print(f'UCM SPICE: {res["spice"]}')
     print('\n\n')
 
 if 'nwpu' in test_datasets.keys():
@@ -120,6 +124,7 @@ if 'nwpu' in test_datasets.keys():
     print(f'NWPUCaptions ROUGE: {res["rouge"]}')
     print(f'NWPUCaptions CIDER: {res["cider"]}')
     print(f'NWPUCaptions METEOR: {res["meteor"]}')
+    # print(f'NWPUCaptions SPICE: {res["spice"]}')
     print('\n\n')
 
 if 'sidney' in test_datasets.keys():
@@ -135,4 +140,5 @@ if 'sidney' in test_datasets.keys():
     print(f'SidneyCaptions ROUGE: {res["rouge"]}')
     print(f'SidneyCaptions CIDER: {res["cider"]}')
     print(f'SidneyCaptions METEOR: {res["meteor"]}')
+   #  print(f'SidneyCaptions SPICE: {res["spice"]}')
     print('\n\n')
