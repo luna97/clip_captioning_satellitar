@@ -8,32 +8,45 @@ from torchvision import transforms as T
 from tqdm import tqdm
 from pycocoevalcap.cider.cider import Cider
 # from pycocoevalcap.meteor.meteor import Meteor
-from nltk.translate.meteor_score import meteor_score as Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.spice.spice import Spice
+from pycocoevalcap.meteor.meteor import Meteor
+
 import numpy as np
 from dataset import get_test_datasets
 
 import nltk
 nltk.download('wordnet')
 
+
 path = 'data/models/full.pth'
 device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
+net.load_state_dict(torch.load(path, map_location=device))
+
+def collate_fn(batch):
+    """
+    select a random caption from each image
+    """
+    images = [item['x'] for item in batch]
+    # get a random caption from each image
+    captions = [ item['captions'] for item in batch]
+    return torch.stack(images), captions
 
 test_datasets = get_test_datasets(net.preprocess_clip)
 
 # load datasets
-bartch_size = 16
+batch_size = 16
 
 bleu_scorer = Bleu(n=4)
 
 cider_scorer = Cider()
 rouge_scorer = Rouge()
 spice_scorer = Spice()
+meteor_scorer = Meteor()
 
 def test(dataloader):
     net.eval()
@@ -43,17 +56,16 @@ def test(dataloader):
 
     count = 0
     with torch.no_grad():
-        for batch in tqdm(dataloader):
-            images = batch['x'].to(device)
-            captions = batch['captions']
-            captions = [[captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
-
+        for images, captions in tqdm(dataloader):
+            images = images.to(device)
             clip_embeddings = net.clip.encode_image(images)
             results = net.get_caption(clip_embeddings)
 
-            for c in range(len(captions)):
-                refs[count + c] = captions[c]
-                res[count + c] = [results[c]]
+            # captions = [[captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
+
+            for b in range(len(captions)):
+                refs[count + b] = captions[b]
+                res[count + b] = [results[b]]
 
             count += len(captions)
 
@@ -63,9 +75,9 @@ def test(dataloader):
 
         cider_score, _ = cider_scorer.compute_score(refs, res)
 
-        # spice_score, _ = spice_scorer.compute_score(refs, res)
+        spice_score, _ = spice_scorer.compute_score(refs, res)
 
-        meteor_score = Meteor(captions, results)  # Compute meteor score
+        meteor_score = meteor_scorer.compute_score(refs, res)
 
 
     return {
@@ -76,12 +88,12 @@ def test(dataloader):
         'rouge': rouge_score,
         'cider': cider_score,
         'meteor': meteor_score,
-        #'spice': spice_score
+        'spice': spice_score
     }
 
 if 'rsicd' in test_datasets.keys():
     rsicd_dataset = test_datasets['rsicd']
-    rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=bartch_size, shuffle=False)
+    rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(rsicd_dataloader)
 
     print("-------------- RSICD results --------------")
@@ -97,7 +109,7 @@ if 'rsicd' in test_datasets.keys():
 
 if 'ucm' in test_datasets.keys():
     ucm_dataset = test_datasets['ucm']
-    ucm_dataloader = DataLoader(ucm_dataset, batch_size=bartch_size, shuffle=False)
+    ucm_dataloader = DataLoader(ucm_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(ucm_dataloader)
 
     print("-------------- UCM results --------------")
@@ -113,7 +125,7 @@ if 'ucm' in test_datasets.keys():
 
 if 'nwpu' in test_datasets.keys():
     nwpucaptions_dataset = test_datasets['nwpu']
-    nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=bartch_size, shuffle=False)
+    nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(nwpucaptions_dataloader)
 
     print("-------------- NWPUCaptions results --------------")
@@ -129,7 +141,7 @@ if 'nwpu' in test_datasets.keys():
 
 if 'sidney' in test_datasets.keys():
     sidneycaptions_dataset = test_datasets['sidney']
-    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=bartch_size, shuffle=False)
+    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(sidneycaptions_dataloader)
 
     print("-------------- SidneyCaptions results --------------")

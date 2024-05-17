@@ -22,9 +22,9 @@ from pycocoevalcap.bleu.bleu import Bleu
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-5, help='Learning rate for generator')
-parser.add_argument('--lr_adapter', type=float, default=2e-4, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=1e-5, help='Weight decay for optimizer')
+parser.add_argument('--lr_gen', type=float, default=1e-6, help='Learning rate for generator')
+parser.add_argument('--lr_adapter', type=float, default=2e-5, help='Learning rate for adapted layer')
+parser.add_argument('--weight_decay', type=float, default=1e-6, help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
 parser.add_argument('--use_remote_clip', action='store_true', help='Use remote clip model')
@@ -113,7 +113,6 @@ for epoch in train_pbar:
         optimizer_gen.zero_grad()
         sched_gpt.step()
         epoch_bar.set_postfix(loss_gpt=loss.item())
-        break
 
     # evaluate the model
     net.eval()
@@ -126,36 +125,19 @@ for epoch in train_pbar:
     with torch.no_grad():
         val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation {epoch}/{epochs}')
         for b, (images, captions) in enumerate(val_pbar):
-            images = images.to(device)
-            # loss = net.train_generator(captions, images=images)
-
             # generate captions
             images = images.to(device)
             clip_embeddings = net.clip.encode_image(images)
             results = net.get_caption(clip_embeddings)
 
-            if b == 0:
-                # print captions
-                print('Captions:')
-                for res, cap in zip(results, captions):
-                    print('prediction: ', res)
-                    print('target: ', cap)
-                    print('')
-
-            captions = [[captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
-
-            for c in range(len(captions)):
+            for c in range(len(results)):
                 refs[count + c] = captions[c]
-                res[count + c] = [ "hello world " + results[c]]
+                res[count + c] = [results[c]]
 
-            count += len(captions)
-
-
-
-            break
+            count += len(results)
 
         # meteor_score = Meteor(refs, res)
-        bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0][4]
+        bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0][3]
 
         # save the model if the score is better
         #if meteor_score > best_meteor:
@@ -166,6 +148,7 @@ for epoch in train_pbar:
 
         if bleu_score > best_bleu:
             best_bleu = bleu_score
+            print(f'Saving model with BLEU score: {bleu_score}')
             torch.save(net.state_dict(), 'data/models/full.pth')
 
     train_pbar.set_postfix(train_loss_gpt=np.mean(train_losses), val_meteor=bleu_score)
