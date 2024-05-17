@@ -77,7 +77,7 @@ def test(dataloader):
 
         spice_score, _ = spice_scorer.compute_score(refs, res)
 
-        meteor_score = meteor_scorer.compute_score(refs, res)
+        meteor_score, _ = meteor_scorer.compute_score(refs, res)
 
 
     return {
@@ -90,6 +90,22 @@ def test(dataloader):
         'meteor': meteor_score,
         'spice': spice_score
     }
+
+if 'sydney' in test_datasets.keys():
+    sidneycaptions_dataset = test_datasets['sydney']
+    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    res = test(sidneycaptions_dataloader)
+
+    print("-------------- SidneyCaptions results --------------")
+    print(f'SidneyCaptions BLEU1: {res["bleu1"]}')
+    print(f'SidneyCaptions BLEU2: {res["bleu2"]}')
+    print(f'SidneyCaptions BLEU3: {res["bleu3"]}')
+    print(f'SidneyCaptions BLEU4: {res["bleu4"]}')
+    print(f'SidneyCaptions ROUGE: {res["rouge"]}')
+    print(f'SidneyCaptions CIDER: {res["cider"]}')
+    print(f'SidneyCaptions METEOR: {res["meteor"]}')
+    print(f'SidneyCaptions SPICE: {res["spice"]}')
+    print('\n\n')
 
 if 'rsicd' in test_datasets.keys():
     rsicd_dataset = test_datasets['rsicd']
@@ -104,7 +120,7 @@ if 'rsicd' in test_datasets.keys():
     print(f'RSICD ROUGE: {res["rouge"]}')
     print(f'RSICD CIDER: {res["cider"]}')
     print(f'RSICD METEOR: {res["meteor"]}')
-    # print(f'RSICD SPICE: {res["spice"]}')
+    print(f'RSICD SPICE: {res["spice"]}')
     print('\n\n')
 
 if 'ucm' in test_datasets.keys():
@@ -120,7 +136,7 @@ if 'ucm' in test_datasets.keys():
     print(f'UCM ROUGE: {res["rouge"]}')
     print(f'UCM CIDER: {res["cider"]}')
     print(f'UCM METEOR: {res["meteor"]}')
-    # print(f'UCM SPICE: {res["spice"]}')
+    print(f'UCM SPICE: {res["spice"]}')
     print('\n\n')
 
 if 'nwpu' in test_datasets.keys():
@@ -136,21 +152,6 @@ if 'nwpu' in test_datasets.keys():
     print(f'NWPUCaptions ROUGE: {res["rouge"]}')
     print(f'NWPUCaptions CIDER: {res["cider"]}')
     print(f'NWPUCaptions METEOR: {res["meteor"]}')
-    # print(f'NWPUCaptions SPICE: {res["spice"]}')
+    print(f'NWPUCaptions SPICE: {res["spice"]}')
     print('\n\n')
 
-if 'sidney' in test_datasets.keys():
-    sidneycaptions_dataset = test_datasets['sidney']
-    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
-    res = test(sidneycaptions_dataloader)
-
-    print("-------------- SidneyCaptions results --------------")
-    print(f'SidneyCaptions BLEU1: {res["bleu1"]}')
-    print(f'SidneyCaptions BLEU2: {res["bleu2"]}')
-    print(f'SidneyCaptions BLEU3: {res["bleu3"]}')
-    print(f'SidneyCaptions BLEU4: {res["bleu4"]}')
-    print(f'SidneyCaptions ROUGE: {res["rouge"]}')
-    print(f'SidneyCaptions CIDER: {res["cider"]}')
-    print(f'SidneyCaptions METEOR: {res["meteor"]}')
-   #  print(f'SidneyCaptions SPICE: {res["spice"]}')
-    print('\n\n')

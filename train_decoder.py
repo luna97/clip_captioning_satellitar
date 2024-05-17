@@ -22,20 +22,22 @@ from pycocoevalcap.bleu.bleu import Bleu
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-6, help='Learning rate for generator')
+parser.add_argument('--lr_gen', type=float, default=2e-5, help='Learning rate for generator')
 parser.add_argument('--lr_adapter', type=float, default=2e-5, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=1e-6, help='Weight decay for optimizer')
+parser.add_argument('--weight_decay', type=float, default=1e-8, help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
 parser.add_argument('--use_remote_clip', action='store_true', help='Use remote clip model')
 parser.add_argument('--dropout', type=float, default=0.2, help='Dropout rate for GPT2')
-parser.add_argument('--datasets', type=str, default='nwpu,', help='Dataset to use for training')
+parser.add_argument('--datasets', type=str, default=None, help='Dataset to use for training')
 args = parser.parse_args()
 
 augmentation = T.Compose([
+    T.RandomRotation(10),
     T.RandomAdjustSharpness(sharpness_factor=2),
     T.RandomAutocontrast(),
     T.RandomAffine(degrees=10, translate=(0.1, 0.1)),
+    T.RandomErasing(p=0.1),
 ])
 
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'

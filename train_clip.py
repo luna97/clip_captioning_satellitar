@@ -38,7 +38,6 @@ print(f'Length of train dataset: {len(dataset_train)}')
 print(f'Length of val dataset: {len(dataset_val)}')
 
 augmentation = T.Compose([
-    T.RandomHorizontalFlip(),
     T.RandomRotation(10),
     T.RandomAdjustSharpness(sharpness_factor=2),
     T.RandomAutocontrast(),

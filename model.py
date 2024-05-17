@@ -70,12 +70,12 @@ class ClipGPT(nn.Module):
         clip_attention_mask = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).to(self.device)
         combined_att_mask = torch.cat([clip_attention_mask, att_mask], dim=1)
 
-        zeros = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).long().to(self.device)
+        ones = torch.ones(input_ids.shape[0], clip_embedding.shape[1]).long().to(self.device)
 
         with torch.no_grad():
             # set the token corresponding to the CLIP embedding to -100
-            labels = torch.cat([zeros, input_ids], dim=1)
-            labels_att_mask = torch.cat([zeros, att_mask], dim=1)
+            labels = torch.cat([ones, input_ids], dim=1)
+            labels_att_mask = torch.cat([ones, att_mask], dim=1)
             labels[~labels_att_mask.bool()] = -100
 
         # positional embedding are automatically added by the model
