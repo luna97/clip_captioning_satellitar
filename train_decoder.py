@@ -15,30 +15,24 @@ from tqdm import tqdm
 import clip
 import argparse
 from huggingface_hub import hf_hub_download
-from nltk.translate.meteor_score import meteor_score as Meteor
-from pycocoevalcap.bleu.bleu import Bleu
+from pycocoevalcap.spice.spice import Spice
+import wandb
+
 
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
-parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=2e-5, help='Learning rate for generator')
-parser.add_argument('--lr_adapter', type=float, default=2e-5, help='Learning rate for adapted layer')
-parser.add_argument('--weight_decay', type=float, default=1e-8, help='Weight decay for optimizer')
-parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
+parser.add_argument('--epochs', type=int, default=15, help='Number of training epochs')
+parser.add_argument('--lr_gen', type=float, default=1e-5, help='Learning rate for generator')
+parser.add_argument('--lr_adapter', type=float, default=3e-5, help='Learning rate for adapted layer')
+parser.add_argument('--weight_decay', type=float, default=0., help='Weight decay for optimizer')
+parser.add_argument('--warmup_steps', type=float, default=200, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
 parser.add_argument('--use_remote_clip', action='store_true', help='Use remote clip model')
 parser.add_argument('--dropout', type=float, default=0.2, help='Dropout rate for GPT2')
 parser.add_argument('--datasets', type=str, default=None, help='Dataset to use for training')
+parser.add_argument('--log', action='store_true', help='Log to wandb')
 args = parser.parse_args()
-
-augmentation = T.Compose([
-    T.RandomRotation(10),
-    T.RandomAdjustSharpness(sharpness_factor=2),
-    T.RandomAutocontrast(),
-    T.RandomAffine(degrees=10, translate=(0.1, 0.1)),
-    T.RandomErasing(p=0.1),
-])
 
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
 print(f'Using device: {device}')
@@ -66,7 +60,7 @@ def collate_fn_train(batch):
     """
     select a random caption from each image
     """
-    images = [augmentation(item['x']) for item in batch]
+    images = [item['x'] for item in batch]
     # get a random caption from each image
     random_index = [np.random.randint(0, len(item['captions'])) for item in batch]
     captions = [ item['captions'][random_index[i]]
@@ -98,9 +92,11 @@ sched_gpt = get_cosine_schedule_with_warmup(
     num_warmup_steps=args.warmup_steps, 
     num_training_steps=len(dataloader_train) * epochs
 )
-best_meteor = 0
-best_bleu = 0
-bleu_scorer = BLEUScore(n_gram=4)
+best_spice = 0
+spice_scorer = Spice()
+
+if args.log:
+    wandb.init(project='clip_captioning_satellitar')
 train_pbar = tqdm(range(epochs), desc='Decoder training', leave=True)
 for epoch in train_pbar:
     net.train()
@@ -122,7 +118,7 @@ for epoch in train_pbar:
     refs = {}
     res = {}
     count = 0
-    bleu_scorer = Bleu(n=4)
+    # bleu_scorer = Bleu(n=4)
 
     with torch.no_grad():
         val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation {epoch}/{epochs}')
@@ -138,19 +134,21 @@ for epoch in train_pbar:
 
             count += len(results)
 
-        # meteor_score = Meteor(refs, res)
-        bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0][3]
+        # bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0][3]
+        spice_score, _ = spice_scorer.compute_score(refs, res)
 
-        # save the model if the score is better
-        #if meteor_score > best_meteor:
-        #   best_meteor = meteor_score
-        #    torch.save(net.state_dict(), 'data/models/full.pth')
-        #elif meteor_score == best_meteor and bleu_score > best_bleu:
-        #    torch.save(net.state_dict(), 'data/models/full.pth')
-
-        if bleu_score > best_bleu:
-            best_bleu = bleu_score
-            print(f'Saving model with BLEU score: {bleu_score}')
+        if spice_score > best_spice:
+            best_spice = spice_score
+            print(f'Saving model with SPICE score: {spice_score}')
             torch.save(net.state_dict(), 'data/models/full.pth')
 
-    train_pbar.set_postfix(train_loss_gpt=np.mean(train_losses), val_meteor=bleu_score)
+    train_pbar.set_postfix(train_loss_gpt=np.mean(train_losses), val_spice=spice_score)
+
+    # Log metrics to wandb
+    if args.log:
+        wandb.log({"train_loss_gpt": np.mean(train_losses), "val_spice": spice_score})
+
+print('Finished training decoder')
+if args.log:
+    wandb.finish()
+

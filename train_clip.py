@@ -14,16 +14,19 @@ from torchmetrics.text.bleu import BLEUScore
 import torch.nn as nn
 from tqdm import tqdm
 import argparse
-from torch.cuda.amp import GradScaler
+from torch.cuda.amp import GradScaler, autocast
+import wandb
 
 # Add argument parser for hyperparameters
 parser = argparse.ArgumentParser(description='Train ClipGPT model')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training (cuda, mps, cpu)')
 parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-parser.add_argument('--epochs', type=int, default=30, help='Number of epochs for training')
-parser.add_argument('--lr', type=float, default=3e-6, help='Learning rate for optimizer')
-parser.add_argument('--weight_decay', type=float, default=1e-08, help='Weight decay for optimizer')
-parser.add_argument('--warmup_steps', type=float, default=10, help='Number of warmup ratio for scheduler')
+parser.add_argument('--epochs', type=int, default=10, help='Number of epochs for training')
+parser.add_argument('--lr', type=float, default=5e-5, help='Learning rate for optimizer')
+parser.add_argument('--weight_decay', type=float, default=0.2, help='Weight decay for optimizer')
+parser.add_argument('--eps', type=float, default=1e-6, help='Epsilon for optimizer')
+parser.add_argument('--warmup_steps', type=float, default=100, help='Number of warmup ratio for scheduler')
+parser.add_argument('--log', action='store_true', help='Log to wandb')
 args = parser.parse_args()
 
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -37,19 +40,11 @@ dataset_test = get_test_datasets(net.preprocess_clip)
 print(f'Length of train dataset: {len(dataset_train)}')
 print(f'Length of val dataset: {len(dataset_val)}')
 
-augmentation = T.Compose([
-    T.RandomRotation(10),
-    T.RandomAdjustSharpness(sharpness_factor=2),
-    T.RandomAutocontrast(),
-    T.RandomAffine(degrees=10, translate=(0.1, 0.1)),
-    T.RandomErasing(p=0.1),
-])
-
 def collate_fn(batch):
     """
     select a random caption from each image
     """
-    images = [augmentation(item['x']) for item in batch]
+    images = [item['x'] for item in batch]
     # get a random caption from each image
     random_index = [np.random.randint(0, len(item['captions'])) for item in batch]
     captions = [ item['captions'][random_index[i]].replace('.', '').strip()
@@ -79,15 +74,20 @@ def clip_loss(image_features, text_features):
     return loss
 
 epochs = args.epochs
-optimizer_clip = torch.optim.AdamW(net.clip.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+optimizer = torch.optim.AdamW(net.clip.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=(0.9, 0.98), eps=args.eps)
+scaler = GradScaler()
+
 sched_clip = get_cosine_schedule_with_warmup(
-    optimizer_clip,
+    optimizer,
     num_warmup_steps=args.warmup_steps,
     num_training_steps=len(dataloader_train) * epochs
 )
 
 if device == 'cuda':
     scaler = GradScaler()
+
+if args.log:
+    wandb.init(project='clip_captioning_satellitar')
 
 train_pbar = tqdm(range(epochs))
 best_val_loss = np.inf
@@ -97,21 +97,23 @@ for epoch in train_pbar:
     train_losses = []
     for images, captions in epoch_bar:
         images = images.to(device)
-        image_features, text_features = net.train_clip(images, captions)
 
-        loss = clip_loss(image_features, text_features)
+        with autocast():
+            image_features, text_features = net.train_clip(images, captions)
 
-        # Backpropagation with gradient scaling
-        if device == 'cuda':
-            scaler.scale(loss).backward()
-            scaler.step(optimizer_clip)
-            scaler.update()
-        else:
-            loss.backward()
-            optimizer_clip.step()
-            optimizer_clip.zero_grad()
+            loss = clip_loss(image_features, text_features)
 
-        sched_clip.step()
+            # Backpropagation with gradient scaling
+            if device == 'cuda':
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+            sched_clip.step()
 
         epoch_bar.set_postfix(loss_clip=loss.item())
         train_losses.append(loss.item())
@@ -128,7 +130,12 @@ for epoch in train_pbar:
         if np.mean(eval_losses) < best_val_loss:
             best_val_loss = np.mean(eval_losses)
             torch.save(net.clip.state_dict(), 'data/models/clip.pth')
-
+            
     train_pbar.set_postfix(train_loss_clip=np.mean(train_losses), val_loss_clip=np.mean(eval_losses))
+    
+    if args.log:
+        wandb.log({'train_loss_clip': np.mean(train_losses), 'val_loss_clip': np.mean(eval_losses)})
 
 print('Finished training clip')
+if args.log:
+    wandb.finish()
