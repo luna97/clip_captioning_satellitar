@@ -23,8 +23,8 @@ import wandb
 parser = argparse.ArgumentParser(description='Train Decoder')
 parser.add_argument('--device', type=str, default=None, help='Device to use for training')
 parser.add_argument('--epochs', type=int, default=15, help='Number of training epochs')
-parser.add_argument('--lr_gen', type=float, default=1e-5, help='Learning rate for generator')
-parser.add_argument('--lr_adapter', type=float, default=3e-5, help='Learning rate for adapted layer')
+parser.add_argument('--lr_gen', type=float, default=1e-4, help='Learning rate for generator')
+parser.add_argument('--lr_adapter', type=float, default=3e-4, help='Learning rate for adapted layer')
 parser.add_argument('--weight_decay', type=float, default=0., help='Weight decay for optimizer')
 parser.add_argument('--warmup_steps', type=float, default=200, help='Number of warmup ratio for scheduler')
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
@@ -110,7 +110,7 @@ for epoch in train_pbar:
         optimizer_gen.step()
         optimizer_gen.zero_grad()
         sched_gpt.step()
-        epoch_bar.set_postfix(loss_gpt=loss.item())
+        epoch_bar.set_postfix(loss_gpt=loss.item())    
 
     # evaluate the model
     net.eval()
@@ -125,8 +125,7 @@ for epoch in train_pbar:
         for b, (images, captions) in enumerate(val_pbar):
             # generate captions
             images = images.to(device)
-            clip_embeddings = net.clip.encode_image(images)
-            results = net.get_caption(clip_embeddings)
+            results = net.get_caption(images)
 
             for c in range(len(results)):
                 refs[count + c] = captions[c]

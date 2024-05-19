@@ -20,14 +20,7 @@ class ClipGPT(nn.Module):
         else:
             raise ValueError('Generator not supported')
         
-        self.adapted_layer = nn.Sequential(
-            # nn.Dropout(dropout),
-            # nn.Linear(512, self.gen_embedding_size * prefix_length // 2),
-            # nn.ReLU(),
-            # nn.Dropout(dropout),
-            nn.Linear(512, self.gen_embedding_size * prefix_length),
-            nn.Dropout(dropout)
-        )
+
 
         clip_model, preprocess = clip.load("ViT-B/32", device=device)
         # use full precision for the model
@@ -35,6 +28,11 @@ class ClipGPT(nn.Module):
         self.clip = clip_model
         self.preprocess_clip = preprocess
         self.prefix_length = prefix_length
+
+        self.adapted_layer = nn.Sequential(
+            nn.Linear(self.clip.visual.transformer.width, self.gen_embedding_size),# * prefix_length),
+            nn.Dropout(dropout)
+        )
 
         self.generator_type = generator
 
@@ -46,14 +44,25 @@ class ClipGPT(nn.Module):
         text_features = self.clip.encode_text(captions_clip)
         return image_features, text_features
     
-    def train_generator(self, captions=None, images=None):
+    def visual_clip(self, x: torch.Tensor):
+        x = self.clip.visual.conv1(x.type(self.clip.dtype))  # shape = [*, width, grid, grid]
+        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+        x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+        x = torch.cat([self.clip.visual.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+        x = x + self.clip.visual.positional_embedding.to(x.dtype)
+        x = self.clip.visual.ln_pre(x)
+
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.clip.visual.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+
+        x = self.clip.visual.ln_post(x)
+        return x
+    
+    def train_generator(self, captions, images):
     # Encode images or text to get CLIP embeddings
         with torch.no_grad():
-            if images is not None:
-                clip_embedding = self.clip.encode_image(images)
-            else:
-                captions_clip = clip.tokenize(captions).to(self.device)
-                clip_embedding = self.clip.encode_text(captions_clip)
+            clip_embedding = self.visual_clip(images)
           
             tokens = self.tokenizer(captions, return_tensors='pt', truncation=True, padding="longest")
             input_ids = tokens.input_ids.to(self.device)
@@ -61,7 +70,7 @@ class ClipGPT(nn.Module):
             gen_embeddings = self.generator.transformer.wte(input_ids)
 
         clip_embedding = self.adapted_layer(clip_embedding.detach())
-        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
+        # clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
   
         # Concatenate CLIP embeddings with generator embeddings
         emb_cat = torch.cat([clip_embedding, gen_embeddings], dim=1)
@@ -86,9 +95,10 @@ class ClipGPT(nn.Module):
         ).loss
 
     
-    def get_caption(self, clip_embedding):
+    def get_caption(self, images):
+        clip_embedding = self.visual_clip(images)
         clip_embedding = self.adapted_layer(clip_embedding.detach())
-        clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
+        # clip_embedding = clip_embedding.view(-1, self.prefix_length, self.gen_embedding_size)
 
         # adding positional embeddings, I need it only here
         pos_emb = self.generator.transformer.wpe(torch.arange(clip_embedding.shape[1]).to(self.device))

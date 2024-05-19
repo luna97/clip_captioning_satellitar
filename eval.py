@@ -58,8 +58,7 @@ def test(dataloader):
     with torch.no_grad():
         for images, captions in tqdm(dataloader):
             images = images.to(device)
-            clip_embeddings = net.clip.encode_image(images)
-            results = net.get_caption(clip_embeddings)
+            results = net.get_caption(images)
 
             # captions = [[captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
 
