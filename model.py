@@ -130,7 +130,9 @@ class ClipGPT(nn.Module):
             List[str]: captions for the images
         """
         if self.encoder_type == VGG:
-            decoder_embedding = self.vgg(images)
+            decoder_embedding = self.vgg.features(images)
+            decoder_embedding = decoder_embedding.permute(0, 2, 3, 1)
+            decoder_embedding = decoder_embedding.view(decoder_embedding.shape[0], -1, decoder_embedding.shape[-1])
         elif self.encoder_type == CLIP:
             decoder_embedding = self.visual_clip(images)
 

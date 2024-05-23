@@ -16,6 +16,7 @@ from huggingface_hub import hf_hub_download
 from pycocoevalcap.spice.spice import Spice
 import wandb
 from utils import collate_fn_train, collate_fn_val
+from torch.cuda.amp import GradScaler, autocast
 
 
 # Add argument parser for hyperparameters
@@ -73,6 +74,9 @@ sched_gpt = get_cosine_schedule_with_warmup(
 best_spice = 0
 spice_scorer = Spice()
 
+if device == 'cuda':
+    scaler = GradScaler()
+
 if args.log: wandb.init(project='clip_captioning_satellitar', config=args)
 
 train_pbar = tqdm(range(args.epochs), desc='Decoder training', leave=True)
@@ -82,13 +86,21 @@ for epoch in train_pbar:
     epoch_bar = tqdm(dataloader_train, total=len(dataloader_train), desc=f'Epoch {epoch}/{args.epochs}', leave=False)
     for images, captions in epoch_bar:
         images = images.to(device)
-        loss = net.train_generator(captions, images=images)
-        loss.backward()
-        train_losses.append(loss.item())
-        optimizer_gen.step()
-        optimizer_gen.zero_grad()
-        sched_gpt.step()
-        epoch_bar.set_postfix(loss_gpt=loss.item())    
+        with autocast():
+            loss = net.train_generator(captions, images=images)
+
+                        # Backpropagation with gradient scaling
+            if device == 'cuda':
+                scaler.scale(loss).backward()
+                scaler.step(optimizer_gen)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer_gen.step()
+                optimizer_gen.zero_grad()
+            train_losses.append(loss.item())
+            sched_gpt.step()
+            epoch_bar.set_postfix(loss_gpt=loss.item())    
 
     # evaluate the model
     net.eval()
