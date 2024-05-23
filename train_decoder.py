@@ -36,7 +36,7 @@ parser.add_argument('--lr_encoder', type=float, default=1e-4, help='Learning rat
 args = parser.parse_args()
 
 assert args.encoder in [CLIP, REMOTE_CLIP, VGG]
-assert args.datasets is None or args.dataset in [RSICD_, UCM, NWPU, SIDNEY]
+assert args.dataset is None or args.dataset in [RSICD_, UCM, NWPU, SIDNEY]
 
 # load device
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -46,7 +46,7 @@ print(f'Using device: {device}')
 net = ClipGPT(device=device, encoder=args.encoder, dropout=args.dropout).to(device)
 
 # load datasets
-datasets = args.datasets.split(',') if args.datasets else ['rsicd', 'ucm', 'nwpu', 'sidney']
+datasets = args.dataset.split(',') if args.dataset else ['rsicd', 'ucm', 'nwpu', 'sidney']
 dataset_train, dataset_val = get_datasets(net.preprocess, datasets)
 dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn_train)
 dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn_val)
@@ -55,7 +55,7 @@ if args.encoder == VGG:
     optimizer_gen = torch.optim.AdamW([
         { 'params': net.generator.parameters(), 'lr': args.lr_gen},
         { 'params': net.adapted_layer.parameters(), 'lr': args.lr_adapter},
-        { 'params': net.encoder.parameters(), 'lr': args.lr_decoder}
+        { 'params': net.vgg.parameters(), 'lr': args.lr_encoder}
     ], weight_decay=args.weight_decay)
 else:
     optimizer_gen = torch.optim.AdamW([

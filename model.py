@@ -30,6 +30,7 @@ class ClipGPT(nn.Module):
             self.preprocess = preprocess
             self.clip.load_state_dict(torch.load('data/models/clip.pth', map_location=device))
             self.encoder_type = CLIP
+            self.encoder_final_dim = self.clip.visual.transformer.width
         elif encoder == REMOTE_CLIP:
             clip_model, preprocess = clip.load("ViT-B/32", device=device)
             self.clip = clip_model
@@ -37,7 +38,7 @@ class ClipGPT(nn.Module):
             checkpoint_path = hf_hub_download("chendelong/RemoteCLIP", "RemoteCLIP-ViT-B-32.pt", cache_dir='checkpoints')
             self.clip.load_state_dict(torch.load(checkpoint_path, map_location=device))
             self.encoder_type = CLIP
-
+            self.encoder_final_dim = self.clip.visual.transformer.width
         elif encoder == VGG:
             self.vgg = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
             self.preprocess = transforms.Compose([
@@ -46,12 +47,14 @@ class ClipGPT(nn.Module):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
+            self.encoder_final_dim = 512
+            self.encoder_type = VGG
         else:
             raise ValueError('Encoder must be either clip or vgg')
         
 
         self.adapted_layer = nn.Sequential(
-            nn.Linear(self.clip.visual.transformer.width, self.gen_embedding_size),
+            nn.Linear(self.encoder_final_dim, self.gen_embedding_size),
             nn.Dropout(dropout)
         )
 
@@ -73,13 +76,16 @@ class ClipGPT(nn.Module):
 
         x = self.clip.visual.ln_post(x)
         return x
-
+    
 
     def train_generator(self, captions, images):
         # Encode images or text to get CLIP embeddings
-        if self.encoder_type == CGG:
-            decoder_embedding = self.vgg(images)
-            print(decoder_embedding.shape)
+        if self.encoder_type == VGG:
+            decoder_embedding = self.vgg.features(images)
+            decoder_embedding = decoder_embedding.permute(0, 2, 3, 1)
+            decoder_embedding = decoder_embedding.view(decoder_embedding.shape[0], -1, decoder_embedding.shape[-1])
+            # decoder_embedding = decoder_embedding.view(decoder_embedding.shape[0], 16, -1)
+            # print(decoder_embedding.shape)
         elif self.encoder_type == CLIP:
             with torch.no_grad():
                 decoder_embedding = self.visual_clip(images)
