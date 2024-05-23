@@ -36,7 +36,7 @@ parser.add_argument('--lr_encoder', type=float, default=1e-4, help='Learning rat
 args = parser.parse_args()
 
 assert args.encoder in [CLIP, REMOTE_CLIP, VGG]
-assert args.datasets is None or args.datasets in [RSICD_, UCM, NWPU, SIDNEY]
+assert args.datasets is None or args.dataset in [RSICD_, UCM, NWPU, SIDNEY]
 
 # load device
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
