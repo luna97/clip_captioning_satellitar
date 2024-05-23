@@ -9,6 +9,10 @@ from PIL import Image
 
 # datasets: https://github.com/201528014227051/RSICD_optimal?tab=readme-ov-file
 
+RSICD_ = 'rsicd'
+UCM = 'ucm'
+NWPU = 'nwpu'
+SIDNEY = 'sidney'
 
 class NWPUCaptions(Dataset):
     splits = ["train", "val", "test"]

@@ -34,8 +34,8 @@ print(f'Using device: {device}')
 
 net = ClipGPT(device=device, generator='gpt2').to(device)
 
-dataset_train, dataset_val = get_datasets(net.preprocess_clip)
-dataset_test = get_test_datasets(net.preprocess_clip)
+dataset_train, dataset_val = get_datasets(net.preprocess)
+dataset_test = get_test_datasets(net.preprocess)
 
 print(f'Length of train dataset: {len(dataset_train)}')
 print(f'Length of val dataset: {len(dataset_val)}')
@@ -99,6 +99,9 @@ for epoch in train_pbar:
         images = images.to(device)
 
         with autocast():
+            image_features = net.clip.encode_image(images)
+            captions_clip = net.clip.tokenize(captions).to(images.device)
+            text_features = net.clip.encode_text(captions_clip)
             image_features, text_features = net.train_clip(images, captions)
 
             loss = clip_loss(image_features, text_features)

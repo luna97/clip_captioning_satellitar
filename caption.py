@@ -28,7 +28,7 @@ from PIL import Image
 image = Image.open(image_path).convert("RGB")
 
 # preprocess image
-image = net.preprocess_clip(image).unsqueeze(0).to(device)
+image = net.preprocess(image).unsqueeze(0).to(device)
 
 # get caption
 net.eval()

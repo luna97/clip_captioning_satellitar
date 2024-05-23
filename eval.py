@@ -36,7 +36,7 @@ def collate_fn(batch):
     captions = [ item['captions'] for item in batch]
     return torch.stack(images), captions
 
-test_datasets = get_test_datasets(net.preprocess_clip)
+test_datasets = get_test_datasets(net.preprocess)
 
 # load datasets
 batch_size = 16
@@ -69,15 +69,10 @@ def test(dataloader):
             count += len(captions)
 
         bleu_score = bleu_scorer.compute_score(refs, res, verbose=False)[0]
-
         rouge_score, _ = rouge_scorer.compute_score(refs, res)
-
         cider_score, _ = cider_scorer.compute_score(refs, res)
-
         spice_score, _ = spice_scorer.compute_score(refs, res)
-
         meteor_score, _ = meteor_scorer.compute_score(refs, res)
-
 
     return {
         'bleu1': bleu_score[0],
