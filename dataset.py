@@ -98,21 +98,26 @@ class SidneyCaptions(Dataset):
         x = self.transform(x)
         return dict(x=x, captions=sample["captions"])
 
-def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
+def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"], **kwargs):
     datasets_train = []
     datasets_val = []
 
+    path_rsicd = kwargs.get("rsicd_path", "data/rsicd/")
+    path_ucm = kwargs.get("ucm_path", "data/ucm/")
+    path_nwpu = kwargs.get("nwpu_path", "data/nwpu/")
+    path_sidney = kwargs.get("sydney_path", "data/sidney/")
+
     # RSICD datasets
-    if "rsicd" in dataset_names and os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
+    if "rsicd" in dataset_names and os.path.exists(os.path.join(path_rsicd, "RSICD_images/00001.jpg")):
         rscid_dataset_train = RSICD(
-            root="data/rsicd/",
+            root=path_rsicd,
             split="train", 
             transform=transform
         )
         datasets_train.append(rscid_dataset_train)
 
         rscid_dataset_val = RSICD(
-            root="data/rsicd/",
+            root=path_rsicd,
             split="val", 
             transform=transform
         )
@@ -122,16 +127,16 @@ def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
         print("RSICD dataset is not available")
 
     # UCM Captions datasets
-    if "ucm" in dataset_names and os.path.exists("data/ucm/images/1.tif"):
+    if "ucm" in dataset_names and os.path.exists(os.path.join(path_ucm, "images/1.tif")):
         ucm_dataset_train = UCMCaptions(
-            root="data/ucm/",
+            root=path_ucm,
             split="train", 
             transform=transform
         )
         datasets_train.append(ucm_dataset_train)
 
         ucm_dataset_val = UCMCaptions(
-            root="data/ucm/",
+            root=path_ucm,
             split="val", 
             transform=transform
         )
@@ -141,16 +146,16 @@ def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
         print("UCM dataset is not available")
 
     # NWPUCaptions datasets
-    if "nwpu" in dataset_names and os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
+    if "nwpu" in dataset_names and os.path.exists(os.path.join(path_nwpu, "images/airplane/airplane_001.jpg")):
         nwpucaptions_dataset_train = NWPUCaptions(
-            root="data/nwpu/",
+            root=path_nwpu,
             split="train", 
             transform=transform
         )
         datasets_train.append(nwpucaptions_dataset_train)
 
         nwpucaptions_dataset_val = NWPUCaptions(
-            root="data/nwpu/",
+            root=path_nwpu,
             split="val", 
             transform=transform
         )
@@ -160,16 +165,16 @@ def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
         print("NWPUCaptions dataset is not available")
 
     # Sidney Captions datasets
-    if "sydney" in dataset_names and os.path.exists("data/sidney/images/1.tif"):
+    if "sydney" in dataset_names and os.path.exists(os.path.join(path_sidney, "images/1.tif")):
         sydney_dataset_train = SidneyCaptions(
-            root="data/sidney/",
+            root=path_sidney,
             split="train", 
             transform=transform
         )
         datasets_train.append(sydney_dataset_train)
 
         sydney_dataset_val = SidneyCaptions(
-            root="data/sidney/",
+            root=path_sidney,
             split="val", 
             transform=transform
         )
@@ -179,56 +184,3 @@ def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"]):
         print("Sidney dataset is not available")
 
     return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
-
-def get_test_datasets(transform):
-    datasets = {}
-
-    # RSICD datasets
-    if os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
-        rscid_dataset = RSICD(
-            root="data/rsicd/",
-            split="test", 
-            transform=transform
-        )
-        datasets['rsicd'] = rscid_dataset
-    else:
-        # warn user that RSICD dataset is not available
-        print("RSICD dataset is not available")
-
-    # UCM Captions datasets
-    if os.path.exists("data/ucm/images/1.tif"):
-        ucm_dataset = UCMCaptions(
-            root="data/ucm/",
-            split="test", 
-            transform=transform
-        )
-        datasets["ucm"] = ucm_dataset
-    else:
-        # warn user that UCM dataset is not available
-        print("UCM dataset is not available")
-
-    # NWPUCaptions datasets
-    if os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
-        nwpucaptions_dataset = NWPUCaptions(
-            root="data/nwpu/",
-            split="test", 
-            transform=transform
-        )
-        datasets["nwpu"] = nwpucaptions_dataset
-    else:
-        # warn user that NWPUCaptions dataset is not available
-        print("NWPUCaptions dataset is not available")
-
-    # Sidney Captions datasets
-    if os.path.exists("data/sidney/images/1.tif"):
-        sydney_dataset = SidneyCaptions(
-            root="data/sidney/",
-            split="test", 
-            transform=transform
-        )
-        datasets["sydney"] = sydney_dataset
-    else:
-        # warn user that Sidney dataset is not available
-        print("Sidney dataset is not available")
-
-    return datasets

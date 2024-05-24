@@ -34,6 +34,12 @@ parser.add_argument('--dataset', type=str, default=None, help='Dataset to use fo
 parser.add_argument('--log', action='store_true', help='Log to wandb')
 parser.add_argument('--encoder', type=str, default=CLIP, help='Decoder model to use')
 parser.add_argument('--lr_encoder', type=float, default=1e-5, help='Learning rate for decoder')
+# path of datasets
+parser.add_argument('--rsicd_path', type=str, default='data/rsicd/', help='Path to RSICD dataset')
+parser.add_argument('--ucm_path', type=str, default='data/ucm/', help='Path to UCM dataset')
+parser.add_argument('--nwpu_path', type=str, default='data/nwpu/', help='Path to NWPU dataset')
+parser.add_argument('--sydney_path', type=str, default='data/sidney', help='Path to SIDNEY dataset')
+
 args = parser.parse_args()
 
 assert args.encoder in [CLIP, REMOTE_CLIP, VGG]
@@ -48,7 +54,8 @@ net = ClipGPT(device=device, encoder=args.encoder, dropout=args.dropout).to(devi
 
 # load datasets
 datasets = args.dataset.split(',') if args.dataset else ['rsicd', 'ucm', 'nwpu', 'sidney']
-dataset_train, dataset_val = get_datasets(net.preprocess, datasets)
+kwargs = {'rsicd_path': args.rsicd_path, 'ucm_path': args.ucm_path, 'nwpu_path': args.nwpu_path, 'sydney_path': args.sydney_path}
+dataset_train, dataset_val = get_datasets(net.preprocess, datasets, **kwargs)
 dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn_train)
 dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn_val)
  
