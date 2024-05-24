@@ -24,8 +24,8 @@ class ClipGPT(nn.Module):
         
         if encoder == CLIP: 
             clip_model, preprocess = clip.load("ViT-B/32", device=device)
-            # use ful-l precision for the model
-            # clip_model.type(torch.float32)
+            if device == 'mps':   
+                clip_model.type(torch.float32)
             self.clip = clip_model
             self.preprocess = preprocess
             self.clip.load_state_dict(torch.load('data/models/clip.pth', map_location=device))
@@ -33,12 +33,15 @@ class ClipGPT(nn.Module):
             self.encoder_final_dim = self.clip.visual.transformer.width
         elif encoder == REMOTE_CLIP:
             clip_model, preprocess = clip.load("ViT-B/32", device=device)
+            if device == 'mps':
+                clip_model.type(torch.float32)
             self.clip = clip_model
             self.preprocess = preprocess
             checkpoint_path = hf_hub_download("chendelong/RemoteCLIP", "RemoteCLIP-ViT-B-32.pt", cache_dir='checkpoints')
             self.clip.load_state_dict(torch.load(checkpoint_path, map_location=device))
             self.encoder_type = CLIP
             self.encoder_final_dim = self.clip.visual.transformer.width
+            
         elif encoder == VGG:
             self.vgg = torch.hub.load('pytorch/vision:v0.10.0', 'vgg16', pretrained=True)
             self.preprocess = transforms.Compose([
