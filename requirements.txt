@@ -8,4 +8,5 @@ Pillow==9.4.0
 tqdm==4.66.1
 pycocoevalcap==1.2 
 datasets==2.18.0
+torch-rs
 git+https://github.com/openai/CLIP.git
