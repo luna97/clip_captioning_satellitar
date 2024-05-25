@@ -98,7 +98,7 @@ class SidneyCaptions(Dataset):
         x = self.transform(x)
         return dict(x=x, captions=sample["captions"])
 
-def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"], **kwargs):
+def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sidney"], **kwargs):
     datasets_train = []
     datasets_val = []
 
@@ -165,22 +165,76 @@ def get_datasets(transform, dataset_names=["rsicd", "ucm", "nwpu", "sydney"], **
         print("NWPUCaptions dataset is not available")
 
     # Sidney Captions datasets
-    if "sydney" in dataset_names and os.path.exists(os.path.join(path_sidney, "images/1.tif")):
-        sydney_dataset_train = SidneyCaptions(
+    if "sidney" in dataset_names and os.path.exists("data/sidney/images/1.tif"):
+        sidney_dataset_train = SidneyCaptions(
             root=path_sidney,
             split="train", 
             transform=transform
         )
-        datasets_train.append(sydney_dataset_train)
+        datasets_train.append(sidney_dataset_train)
 
-        sydney_dataset_val = SidneyCaptions(
+        sidney_dataset_val = SidneyCaptions(
             root=path_sidney,
             split="val", 
             transform=transform
         )
-        datasets_val.append(sydney_dataset_val)
-    elif "sydney" in dataset_names:
+        datasets_val.append(sidney_dataset_val)
+    elif "sidney" in dataset_names:
         # warn user that Sidney dataset is not available
         print("Sidney dataset is not available")
 
     return ConcatDataset(datasets_train), ConcatDataset(datasets_val)
+
+
+def get_test_datasets(transform):
+    datasets = {}
+
+    # RSICD datasets
+    if os.path.exists("data/rsicd/RSICD_images/00001.jpg"):
+        rscid_dataset = RSICD(
+            root="data/rsicd/",
+            split="test", 
+            transform=transform
+        )
+        datasets['rsicd'] = rscid_dataset
+    else:
+        # warn user that RSICD dataset is not available
+        print("RSICD dataset is not available")
+
+    # UCM Captions datasets
+    if os.path.exists("data/ucm/images/1.tif"):
+        ucm_dataset = UCMCaptions(
+            root="data/ucm/",
+            split="test", 
+            transform=transform
+        )
+        datasets["ucm"] = ucm_dataset
+    else:
+        # warn user that UCM dataset is not available
+        print("UCM dataset is not available")
+
+    # NWPUCaptions datasets
+    if os.path.exists("data/nwpu/images/airplane/airplane_001.jpg"):
+        nwpucaptions_dataset = NWPUCaptions(
+            root="data/nwpu/",
+            split="test", 
+            transform=transform
+        )
+        datasets["nwpu"] = nwpucaptions_dataset
+    else:
+        # warn user that NWPUCaptions dataset is not available
+        print("NWPUCaptions dataset is not available")
+
+    # Sidney Captions datasets
+    if os.path.exists("data/sidney/images/1.tif"):
+        sidney_dataset = SidneyCaptions(
+            root="data/sidney/",
+            split="test", 
+            transform=transform
+        )
+        datasets["sidney"] = sidney_dataset
+    else:
+        # warn user that Sidney dataset is not available
+        print("Sidney dataset is not available")
+
+    return datasets

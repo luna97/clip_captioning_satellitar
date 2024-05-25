@@ -163,4 +163,3 @@ class ClipGPT(nn.Module):
             sents.append(sent)
 
         return sents
-    

@@ -13,7 +13,6 @@ import argparse
 from huggingface_hub import hf_hub_download
 from pycocoevalcap.spice.spice import Spice
 from pycocoevalcap.cider.cider import Cider
-import wandb
 from utils import collate_fn_train, collate_fn_val
 from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
@@ -48,6 +47,8 @@ assert args.dataset is None or args.dataset in [RSICD_, UCM, NWPU, SIDNEY]
 # if model folder do not exist, create it
 if not os.path.exists('data/models'):
     os.makedirs('data/models')
+    
+if args.log: import wandb
 
 # load device
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'

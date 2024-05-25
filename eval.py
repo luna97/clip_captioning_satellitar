@@ -1,13 +1,12 @@
 # load model
 import torch
-from model import ClipGPT
+from model import ClipGPT, REMOTE_CLIP, CLIP, VGG
 from dataset import NWPUCaptions, SidneyCaptions
 from torch.utils.data import DataLoader
 from torchrs.datasets import RSICD, UCMCaptions
 from torchvision import transforms as T
 from tqdm import tqdm
 from pycocoevalcap.cider.cider import Cider
-# from pycocoevalcap.meteor.meteor import Meteor
 from pycocoevalcap.rouge.rouge import Rouge
 from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.spice.spice import Spice
@@ -17,15 +16,24 @@ import numpy as np
 from dataset import get_test_datasets
 
 import nltk
+import argparse
 nltk.download('wordnet')
 
+parser = argparse.ArgumentParser(description='Evaluation script for captioning model')
+parser.add_argument('--encoder', type=str, default='REMOTE_CLIP', help='Encoder type')
+parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device type')
+parser.add_argument('--path', type=str, default='data/models/full.pth', help='Path to the model checkpoint')
+parser.add_argument('--batch_size', type=int, default=16, help='Batch size for evaluation')
 
-path = 'data/models/full.pth'
-device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
-print(f'Using device: {device}')
+args = parser.parse_args()
 
-net = ClipGPT(device=device, generator='gpt2').to(device)
-net.load_state_dict(torch.load(path, map_location=device))
+assert args.encoder in [REMOTE_CLIP, CLIP, VGG]
+assert args.device in ['cuda', 'cpu', 'mps']
+
+print(f'Using device: {args.device}')
+
+net = ClipGPT(device=args.device, encoder=args.encoder).to(args.device)
+net.load_state_dict(torch.load(args.path, map_location=args.device))
 
 def collate_fn(batch):
     """
@@ -37,9 +45,6 @@ def collate_fn(batch):
     return torch.stack(images), captions
 
 test_datasets = get_test_datasets(net.preprocess)
-
-# load datasets
-batch_size = 16
 
 bleu_scorer = Bleu(n=4)
 
@@ -57,7 +62,7 @@ def test(dataloader):
     count = 0
     with torch.no_grad():
         for images, captions in tqdm(dataloader):
-            images = images.to(device)
+            images = images.to(args.device)
             results = net.get_caption(images)
 
             # captions = [[captions[j][i] for j in range(len(captions))] for i in range(len(captions[0]))]
@@ -85,9 +90,9 @@ def test(dataloader):
         'spice': spice_score
     }
 
-if 'sydney' in test_datasets.keys():
-    sidneycaptions_dataset = test_datasets['sydney']
-    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+if 'sidney' in test_datasets.keys():
+    sidneycaptions_dataset = test_datasets['sidney']
+    sidneycaptions_dataloader = DataLoader(sidneycaptions_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(sidneycaptions_dataloader)
 
     print("-------------- SidneyCaptions results --------------")
@@ -103,7 +108,7 @@ if 'sydney' in test_datasets.keys():
 
 if 'rsicd' in test_datasets.keys():
     rsicd_dataset = test_datasets['rsicd']
-    rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    rsicd_dataloader = DataLoader(rsicd_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(rsicd_dataloader)
 
     print("-------------- RSICD results --------------")
@@ -119,7 +124,7 @@ if 'rsicd' in test_datasets.keys():
 
 if 'ucm' in test_datasets.keys():
     ucm_dataset = test_datasets['ucm']
-    ucm_dataloader = DataLoader(ucm_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    ucm_dataloader = DataLoader(ucm_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(ucm_dataloader)
 
     print("-------------- UCM results --------------")
@@ -135,7 +140,7 @@ if 'ucm' in test_datasets.keys():
 
 if 'nwpu' in test_datasets.keys():
     nwpucaptions_dataset = test_datasets['nwpu']
-    nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    nwpucaptions_dataloader = DataLoader(nwpucaptions_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
     res = test(nwpucaptions_dataloader)
 
     print("-------------- NWPUCaptions results --------------")
