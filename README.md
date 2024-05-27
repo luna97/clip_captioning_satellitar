@@ -66,16 +66,32 @@ Can be found here: https://github.com/HaiyanHuang98/NWPU-Captions. The folder st
 
 ## Training
 
-To train the model, you have first to train clip alone. The trainind is done using all the datasets combined.
 
+### VGG16
+
+To train using VGG16 as backbone encoder run:
 ```bash
-python train_clip.py --lr 1e-6 --batch_size 32 --epochs 10
+python3 train_decoder.py --encoder=vgg
 ```
 
-Then you can train the GPT2 model:
+### RemoteCLIP
+
+To train using RemoteCLIP backbone run:
+```bash
+python3 train_decoder.py --encoder=remote_clip
+```
+### Finetuing CLIP
+
+If you want to finetune clip with SEG-4 dataset run:
 
 ```bash
-python train_decoder.py --lr_gen 1e-6 --lr_adapter 1e-4 --batch_size 32 --epochs 10
+python train_clip.py
+```
+
+Then you can train the decoder model:
+
+```bash
+python train_decoder.py --encoder=clip
 ```
 
 ## Evaluation

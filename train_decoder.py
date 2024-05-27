@@ -47,8 +47,7 @@ assert args.dataset is None or args.dataset in [RSICD_, UCM, NWPU, SIDNEY]
 # if model folder do not exist, create it
 if not os.path.exists('data/models'):
     os.makedirs('data/models')
-    
-if args.log: import wandb
+
 
 # load device
 device = args.device if args.device else 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -85,12 +84,14 @@ sched_gpt = get_cosine_schedule_with_warmup(
 # store best results
 best_score = 0
 spice_scorer = Spice()
-cider_scorer = Cider()
 
 if device == 'cuda':
     scaler = GradScaler()
 
-if args.log: wandb.init(project='clip_captioning_satellitar', config=args)
+if args.log: 
+    import wandb
+    wandb._service_wait = 60
+    wandb.init(project='clip_captioning_satellitar', config=args)
 
 train_pbar = tqdm(range(args.epochs), desc='Decoder training', leave=True)
 for epoch in train_pbar:
@@ -118,6 +119,8 @@ for epoch in train_pbar:
     # evaluate the model
     net.eval()
     refs, res = {}, {}
+    cider_scorer = Cider()
+
     count = 0
     with torch.no_grad():
         val_pbar = tqdm(dataloader_val, total=len(dataloader_val), leave=False, desc=f'Validation {epoch}/{args.epochs}')
